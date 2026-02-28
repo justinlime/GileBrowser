@@ -60,8 +60,8 @@ func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme strin
 				}
 				pd.EntryCount = count
 			}
-			// Directory size (reuse existing helper).
-			pd.FileSize = dirSize(fsPath)
+			// Directory size — served from cache to avoid blocking on a full walk.
+			pd.FileSize = cachedDirSize(fsPath)
 		} else {
 			mime := mimeForFile(fsPath)
 			pd.MIMEType = mime

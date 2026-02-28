@@ -71,9 +71,11 @@ func formatSize(b int64) string {
 }
 
 // IndexHandler serves the search index as JSON.
+// The index is built once and cached with a background refresh on expiry so
+// that repeated search requests never trigger a synchronous full tree walk.
 func IndexHandler(roots map[string]string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		index := buildIndex(roots)
+		index := cachedIndex(roots)
 		w.Header().Set("Content-Type", "application/json")
 		encodeJSON(w, index)
 	}

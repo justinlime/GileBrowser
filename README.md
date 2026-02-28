@@ -86,3 +86,40 @@ go build -o gilebrowser .
 ```
 
 Requires Go 1.25+.
+
+## Troubleshooting
+
+### Watcher: inotify watch limit reached
+
+GileBrowser uses the Linux kernel's `inotify` interface to watch served directories for filesystem changes, enabling instant cache invalidation without polling. Each watched directory consumes one inotify watch descriptor, and the kernel enforces a per-user limit via `fs.inotify.max_user_watches`.
+
+The default on most distributions (Ubuntu, Alpine, Debian, etc.) is **8,192**. If a served directory tree contains more subdirectories than this limit allows — or if the budget is shared with other running processes (editors, build tools, etc.) — you will see this message in the server log:
+
+```
+watcher: inotify watch limit reached (stopped at <path>).
+  Directories beyond this point will not receive instant cache invalidation;
+  the 5m0s safety TTL will still correct any stale entries.
+```
+
+**Impact:** Directories that could not be watched fall back to a 5-minute periodic cache refresh. The server continues to function normally; only the immediacy of cache invalidation is reduced for those paths.
+
+**Fix:** Raise the limit on the host machine. This cannot be changed from inside a Docker container as it is a kernel-level parameter that must be set on the host.
+
+To raise it temporarily (resets on reboot):
+
+```sh
+sudo sysctl -w fs.inotify.max_user_watches=524288
+```
+
+To make it permanent:
+
+```sh
+echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+```
+
+The value `524288` is a common recommendation and covers most use cases. For extremely large trees (such as `/nix/store`) an even higher value may be needed. To check the current limit:
+
+```sh
+cat /proc/sys/fs/inotify/max_user_watches
+```

@@ -49,6 +49,17 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
 	logStartup(cfg, roots, addr)
+
+	// Warm the directory-size and search-index caches in the background so
+	// that the first real page load is never a cold cache miss.
+	handlers.WarmCache(roots)
+
+	// Watch all managed directories for filesystem changes and invalidate
+	// only the affected cache entries when they occur.
+	if _, err := handlers.StartWatcher(roots); err != nil {
+		log.Printf("watcher: could not start filesystem watcher: %v", err)
+	}
+
 	return http.ListenAndServe(addr, mux)
 }
 

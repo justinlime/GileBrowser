@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"gileserver/models"
 )
@@ -89,7 +90,7 @@ func RootHandler(roots map[string]string, siteName, defaultTheme string, tmpl in
 				Name:  name,
 				Path:  "/" + name,
 				IsDir: true,
-				Size:  dirSize(fsDir),
+				Size:  cachedDirSize(fsDir),
 			}
 			if fi, err := os.Stat(fsDir); err == nil {
 				fe.ModTime = fi.ModTime()
@@ -115,20 +116,22 @@ func RootHandler(roots map[string]string, siteName, defaultTheme string, tmpl in
 }
 
 // buildEntries reads a directory and returns sorted FileEntry values.
+// Directory sizes are computed concurrently and served from a short-lived cache
+// so that listings with many subdirectories don't block on serial tree walks.
 func buildEntries(roots map[string]string, urlPath, fsPath string) ([]models.FileEntry, error) {
 	rawEntries, err := os.ReadDir(fsPath)
 	if err != nil {
 		return nil, err
 	}
 
-	var entries []models.FileEntry
+	// Pre-allocate and populate the slice without sizes yet.
+	entries := make([]models.FileEntry, 0, len(rawEntries))
 	for _, e := range rawEntries {
-		// Skip hidden files
+		// Skip hidden files.
 		if strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
 
-		entryURL := path.Join(urlPath, e.Name())
 		fi, err := e.Info()
 		if err != nil {
 			continue
@@ -136,15 +139,13 @@ func buildEntries(roots map[string]string, urlPath, fsPath string) ([]models.Fil
 
 		fe := models.FileEntry{
 			Name:    e.Name(),
-			Path:    entryURL,
+			Path:    path.Join(urlPath, e.Name()),
 			IsDir:   e.IsDir(),
 			Size:    fi.Size(),
 			ModTime: fi.ModTime(),
 		}
 
-		if e.IsDir() {
-			fe.Size = dirSize(filepath.Join(fsPath, e.Name()))
-		} else {
+		if !e.IsDir() {
 			fullPath := filepath.Join(fsPath, e.Name())
 			mime := mimeForFile(fullPath)
 			fe.MIMEType = mime
@@ -155,6 +156,22 @@ func buildEntries(roots map[string]string, urlPath, fsPath string) ([]models.Fil
 
 		entries = append(entries, fe)
 	}
+
+	// Compute directory sizes concurrently; each goroutine updates its own
+	// slot so no mutex is needed for the slice writes.
+	var wg sync.WaitGroup
+	for i := range entries {
+		if !entries[i].IsDir {
+			continue
+		}
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			fsDir := filepath.Join(fsPath, entries[i].Name)
+			entries[i].Size = cachedDirSize(fsDir)
+		}(i)
+	}
+	wg.Wait()
 
 	// Directories first, then files; each group sorted alphabetically.
 	sort.Slice(entries, func(i, j int) bool {
