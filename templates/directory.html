@@ -1,0 +1,71 @@
+{{define "content"}}
+<nav class="breadcrumbs" aria-label="breadcrumb">
+  {{range $i, $crumb := .Breadcrumbs}}
+    {{if $i}}<span class="sep">/</span>{{end}}
+    {{if eq $i (add (len $.Breadcrumbs) -1)}}
+      {{if eq $i 0}}
+        <a class="crumb" href="/">{{$crumb.Name}}</a>
+      {{else}}
+        <span class="crumb current">{{$crumb.Name}}</span>
+      {{end}}
+    {{else}}
+      <a class="crumb" href="{{$crumb.Path}}">{{$crumb.Name}}</a>
+    {{end}}
+  {{end}}
+</nav>
+
+<div class="dir-header">
+  {{if not .IsRoot}}
+  <a class="btn btn-back" href="{{(index .Breadcrumbs (add (len .Breadcrumbs) -2)).Path}}">Back</a>
+  {{end}}
+  <div class="dir-header-right">
+    {{if .DownloadURL}}
+    <a class="btn btn-primary" href="{{.DownloadURL}}">{{if .IsRoot}}Download All{{else}}Download Folder{{end}}</a>
+    {{end}}
+  </div>
+</div>
+<h1 class="dir-title">{{.Title}}</h1>
+
+{{if .Entries}}
+<table class="file-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th class="col-size">Size</th>
+      <th class="col-mtime">Modified</th>
+      <th class="col-actions">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Entries}}
+    <tr class="{{if .IsDir}}row-dir{{else}}row-file{{end}}">
+      <td class="col-name">
+        {{if .IsDir}}
+          <a href="{{.Path}}" class="entry-link dir-link">
+            <img src="/static/images/folder.svg" alt="" class="file-icon" />{{.Name}}/
+          </a>
+        {{else}}
+          <a href="/preview{{.Path}}" class="entry-link file-link">{{.Name}}</a>
+        {{end}}
+      </td>
+      <td class="col-size">{{humanSize .Size}}</td>
+      <td class="col-mtime">{{.ModTime.Format "2006-01-02 15:04"}}</td>
+      <td class="col-actions">
+        <div class="action-group">
+          {{if .IsDir}}
+            <a class="btn btn-sm btn-secondary" href="{{.Path}}">Browse</a>
+            <a class="btn btn-sm btn-primary" href="/zip{{.Path}}">Download</a>
+          {{else}}
+            <a class="btn btn-sm btn-secondary" href="/preview{{.Path}}">Preview</a>
+            <a class="btn btn-sm btn-primary" href="/download{{.Path}}">Download</a>
+          {{end}}
+        </div>
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="empty-dir">This directory is empty.</p>
+{{end}}
+{{end}}

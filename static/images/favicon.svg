@@ -1,0 +1,30 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background -->
+  <rect x="16" y="16" width="224" height="224" rx="40" fill="#1E1E2E"></rect>
+
+  <!-- Inner Surface Panel -->
+  <rect x="48" y="48" width="160" height="160" rx="28" fill="#313244"></rect>
+
+  <!-- File Shape -->
+  <path d="M92 76H148L172 100V168C172 178 165 184 156 184H92C83 184 76 178 76 168V92C76 83 83 76 92 76Z" fill="#CDD6F4"></path>
+
+  <!-- Fold -->
+  <polygon points="148,76 172,100 148,100" fill="#BAC2DE"></polygon>
+
+  <!-- Server Lines -->
+  <rect x="104" y="120" width="60" height="10" rx="5" fill="#89B4FA"></rect>
+  <rect x="104" y="138" width="60" height="10" rx="5" fill="#89B4FA"></rect>
+  <rect x="104" y="156" width="60" height="10" rx="5" fill="#89B4FA"></rect>
+
+  <!-- Status Indicators -->
+  <circle cx="112" cy="125" r="3" fill="#1E1E2E"></circle>
+  <circle cx="112" cy="143" r="3" fill="#1E1E2E"></circle>
+  <circle cx="112" cy="161" r="3" fill="#1E1E2E"></circle>
+
+  <!-- G Letter -->
+  <text x="128" y="112" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="36" font-weight="700" fill="#CBA6F7">
+    G
+  </text>
+
+</svg>

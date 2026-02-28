@@ -1,0 +1,89 @@
+{{define "content"}}
+<nav class="breadcrumbs" aria-label="breadcrumb">
+  {{range $i, $crumb := .Breadcrumbs}}
+    {{if $i}}<span class="sep">/</span>{{end}}
+    {{if and (eq $i (add (len $.Breadcrumbs) -1)) (gt $i 0)}}
+      <span class="crumb current">{{$crumb.Name}}</span>
+    {{else}}
+      <a class="crumb" href="{{$crumb.Path}}">{{$crumb.Name}}</a>
+    {{end}}
+  {{end}}
+</nav>
+
+<div class="preview-header">
+  <div class="action-group">
+    {{if .IsDir}}
+      <a class="btn btn-secondary" href="{{.FilePath}}">Browse</a>
+      <a class="btn btn-primary"   href="{{.DownloadURL}}">Download Folder</a>
+    {{else}}
+      <a class="btn btn-primary" href="{{.DownloadURL}}">Download File</a>
+    {{end}}
+  </div>
+</div>
+<h1 class="preview-title">{{.FileName}}</h1>
+</div>
+
+<div class="preview-body">
+
+  {{if .IsDir}}
+  <div class="info-card">
+    <div class="info-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7a2 2 0 0 1 2-2h3.172a2 2 0 0 1 1.414.586l1.828 1.828A2 2 0 0 0 12.828 8H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+      </svg>
+    </div>
+    <dl class="info-meta">
+      <div class="info-row"><dt>Path</dt>      <dd>{{.FilePath}}</dd></div>
+      <div class="info-row"><dt>Total size</dt><dd>{{humanSize .FileSize}}</dd></div>
+      <div class="info-row"><dt>Items</dt>     <dd>{{.EntryCount}}</dd></div>
+      <div class="info-row"><dt>Modified</dt>  <dd>{{.ModTime.Format "2006-01-02 15:04:05"}}</dd></div>
+    </dl>
+  </div>
+  {{end}}
+
+  {{if .IsBinary}}
+  <div class="info-card">
+    <div class="info-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="18" x2="12" y2="12"/>
+        <line x1="9"  y1="15" x2="15" y2="15"/>
+      </svg>
+    </div>
+    <dl class="info-meta">
+      <div class="info-row"><dt>Path</dt>     <dd>{{.FilePath}}</dd></div>
+      <div class="info-row"><dt>Size</dt>     <dd>{{humanSize .FileSize}}</dd></div>
+      <div class="info-row"><dt>Type</dt>     <dd>{{.MIMEType}}</dd></div>
+      <div class="info-row"><dt>Modified</dt> <dd>{{.ModTime.Format "2006-01-02 15:04:05"}}</dd></div>
+    </dl>
+  </div>
+  {{end}}
+
+  {{if .IsImage}}
+  <div class="info-card info-card--inline">
+    <dl class="info-meta">
+      <div class="info-row"><dt>Size</dt>     <dd>{{humanSize .FileSize}}</dd></div>
+      <div class="info-row"><dt>Type</dt>     <dd>{{.MIMEType}}</dd></div>
+      <div class="info-row"><dt>Modified</dt> <dd>{{.ModTime.Format "2006-01-02 15:04:05"}}</dd></div>
+    </dl>
+  </div>
+  <div class="image-preview">
+    <img src="{{.DownloadURL}}" alt="{{.FileName}}" />
+  </div>
+  {{end}}
+
+  {{if .IsText}}
+  {{if .IsRendered}}
+  <div class="rendered-preview">
+    {{.RenderedContent}}
+  </div>
+  {{else}}
+  <div class="text-preview">
+    {{.HighlightedContent}}
+  </div>
+  {{end}}
+  {{end}}
+
+</div>
+{{end}}

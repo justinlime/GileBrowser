@@ -1,0 +1,29 @@
+{{/* base.html – defines the "base" block layout */}}
+{{define "base"}}<!DOCTYPE html>
+<html lang="en" data-default-theme="{{.DefaultTheme}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}} – {{.SiteName}}</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/highlight.css">
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="site-title">{{.SiteName}}</a>
+    <div class="search-wrap">
+      <input type="text" id="search-input" placeholder="Search files..." autocomplete="off" />
+      <div id="search-results" class="search-results hidden"></div>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark mode">
+      <span id="theme-icon">☀</span>
+    </button>
+  </header>
+  <main class="container">
+    {{block "content" .}}{{end}}
+  </main>
+  <script src="/static/js/main.js"></script>
+</body>
+</html>
+{{end}}
