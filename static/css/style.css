@@ -239,14 +239,15 @@ a {
   text-decoration: none;
 }
 a:hover {
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 /* ---- Layout ---------------------------------------------- */
 .container {
-  max-width: 960px;
+  width: 100%;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 2rem 1.5rem;
+  padding: 2rem 2.5rem;
 }
 
 /* ---- Header ---------------------------------------------- */
@@ -384,6 +385,11 @@ a:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.55rem 1rem;
+  box-shadow: var(--shadow);
 }
 .breadcrumbs .crumb {
   color: var(--accent);
@@ -507,22 +513,23 @@ a:hover {
   justify-content: flex-end;
 }
 
+/* Force Browse / Preview (the left action button) to a fixed width so
+   the two labels always occupy identical space regardless of text length. */
+.col-actions .action-group .btn:first-child {
+  width: 5.5rem;
+  text-align: center;
+}
+
 .entry-link {
   color: var(--text);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-}
-.entry-link:hover {
-  color: var(--accent);
-  text-decoration: none;
+  pointer-events: none;
 }
 .dir-link {
   color: var(--ctp-blue);
-}
-.dir-link:hover {
-  color: var(--accent);
 }
 .file-icon {
   width: 24px;
@@ -578,6 +585,18 @@ a:hover {
   background: var(--accent);
   color: var(--ctp-base);
   border-color: var(--accent);
+  text-decoration: none;
+}
+
+.btn-blue {
+  background: var(--ctp-blue);
+  color: var(--ctp-base);
+  border-color: var(--ctp-blue);
+}
+.btn-blue:hover {
+  background: var(--ctp-sapphire);
+  border-color: var(--ctp-sapphire);
+  color: var(--ctp-base);
   text-decoration: none;
 }
 
@@ -676,10 +695,25 @@ a:hover {
 .preview-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-bottom: 1.5rem;
-  gap: 1rem;
-  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+}
+
+.preview-header-right {
+  margin-left: auto;
+}
+
+.preview-header .action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.preview-header .action-group .btn,
+.preview-header > .btn {
+  white-space: nowrap;
 }
 
 .preview-title {
@@ -956,7 +990,7 @@ a:hover {
     padding: 1rem 0.75rem;
   }
 
-  /* header — stack site title + search vertically */
+  /* header — site-title left, theme-toggle right, search full-width below */
   .site-header {
     flex-wrap: wrap;
     gap: 0.6rem;
@@ -965,6 +999,7 @@ a:hover {
   }
   .site-title {
     order: 0;
+    flex-shrink: 0;
   }
   .theme-toggle {
     order: 1;
@@ -973,44 +1008,40 @@ a:hover {
     font-size: 0.95rem;
     min-width: 40px;
     height: 36px;
+    flex-shrink: 0;
   }
   .search-wrap {
     order: 2;
-    max-width: 100%;
     width: 100%;
+    max-width: 100%;
+    flex-basis: 100%;
   }
 
-  /* dir header — centre both buttons on mobile */
+  /* dir header — keep Back left, Download right on mobile */
   .dir-header {
-    justify-content: center;
-  }
-  .dir-header-right {
-    margin-left: 0;
+    justify-content: space-between;
   }
 
   /* dir/preview titles */
   .dir-title {
-    font-size: 1.35rem;
+    font-size: 2.2rem;
+    margin-top: 1.25rem;
   }
   .preview-title {
     font-size: 1.35rem;
   }
 
-  /* preview header — centre the buttons */
+  /* preview header — single row on mobile, font scales to fit */
   .preview-header {
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+  .preview-header-right {
+    margin-left: 0;
   }
   .preview-header .action-group {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-  .preview-header .action-group .btn {
-    flex: 1;
-    text-align: center;
+    flex-wrap: nowrap;
+    gap: 0.3rem;
   }
 
   /* ---- file table: convert to card layout on mobile ---- */

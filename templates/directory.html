@@ -20,7 +20,7 @@
   {{end}}
   <div class="dir-header-right">
     {{if .DownloadURL}}
-    <a class="btn btn-primary" href="{{.DownloadURL}}">{{if .IsRoot}}Download All{{else}}Download Folder{{end}}</a>
+    <a class="btn btn-primary" href="{{.DownloadURL}}">{{if .IsRoot}}Download All{{else}}Download Folder{{end}} ({{humanSizeShort .TotalSize}})</a>
     {{end}}
   </div>
 </div>

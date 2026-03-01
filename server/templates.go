@@ -19,9 +19,10 @@ type Templates struct {
 }
 
 var tmplFuncs = template.FuncMap{
-	"humanSize":     humanSize,
-	"add":           func(a, b int) int { return a + b },
-	"downloadStats": handlers.GetStats,
+	"humanSize":      humanSize,
+	"humanSizeShort": humanSizeShort,
+	"add":            func(a, b int) int { return a + b },
+	"downloadStats":  handlers.GetStats,
 }
 
 // LoadTemplates parses all templates from the embedded FS.
@@ -111,6 +112,23 @@ func humanSize(n int64) string {
 	}
 	div, exp := int64(unit), 0
 	for n := n / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// humanSizeShort formats a byte count as a compact label suitable for
+// embedding inside a button.  Values below 1 KB are shown as "< 1 KB" to
+// keep the width predictable.  Everything else is rounded to one decimal
+// place at the appropriate SI prefix (KB / MB / GB / TB).
+func humanSizeShort(n int64) string {
+	const unit = 1000
+	if n < unit {
+		return "< 1 KB"
+	}
+	div, exp := int64(unit), 0
+	for v := n / unit; v >= unit; v /= unit {
 		div *= unit
 		exp++
 	}

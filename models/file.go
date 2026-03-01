@@ -28,6 +28,9 @@ type DirListing struct {
 	Entries     []FileEntry
 	// DownloadURL is the URL that will serve this directory as a ZIP archive.
 	DownloadURL string
+	// TotalSize is the aggregate size in bytes of all files under this directory,
+	// used to annotate the "Download All / Download Folder" button label.
+	TotalSize int64
 	// IsRoot is true when this listing represents the top-level server root.
 	IsRoot bool
 	// DefaultTheme is the server-configured starting theme ("dark" or "light").

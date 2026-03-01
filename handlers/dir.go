@@ -60,6 +60,7 @@ func DirHandler(roots map[string]string, siteName, defaultTheme string, tmpl int
 			Breadcrumbs:  buildBreadcrumbs(siteName, urlPath),
 			Entries:      entries,
 			DownloadURL:  "/zip" + urlPath,
+			TotalSize:    cachedDirSize(fsPath),
 			DefaultTheme: defaultTheme,
 		}
 
@@ -84,13 +85,16 @@ func RootHandler(roots map[string]string, siteName, defaultTheme string, tmpl in
 		}
 		sort.Strings(names)
 
+		var totalSize int64
 		for _, name := range names {
 			fsDir := roots[name]
+			sz := cachedDirSize(fsDir)
+			totalSize += sz
 			fe := models.FileEntry{
 				Name:  name,
 				Path:  "/" + name,
 				IsDir: true,
-				Size:  cachedDirSize(fsDir),
+				Size:  sz,
 			}
 			if fi, err := os.Stat(fsDir); err == nil {
 				fe.ModTime = fi.ModTime()
@@ -105,6 +109,7 @@ func RootHandler(roots map[string]string, siteName, defaultTheme string, tmpl in
 			Breadcrumbs:  buildBreadcrumbs(siteName, "/"),
 			Entries:      entries,
 			DownloadURL:  "/zip/",
+			TotalSize:    totalSize,
 			IsRoot:       true,
 			DefaultTheme: defaultTheme,
 		}
