@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -162,8 +163,14 @@ func streamZip(w http.ResponseWriter, entries []zipEntry, name string) (int64, e
 		return 0, err
 	}
 
+	// mime.FormatMediaType correctly quotes the filename parameter and escapes
+	// any characters (including `"` and `\`) that would otherwise break the
+	// header or enable injection. This mirrors the approach used by FileHandler.
+	disposition := mime.FormatMediaType("attachment", map[string]string{
+		"filename": name + ".zip",
+	})
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.zip"`, name))
+	w.Header().Set("Content-Disposition", disposition)
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", cw.n))
 
 	return cw.n, buildZip(w, entries)

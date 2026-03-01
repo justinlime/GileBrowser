@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
 	"golang.org/x/time/rate"
@@ -214,11 +215,72 @@ func (lw *limitedResponseWriter) Unwrap() http.ResponseWriter {
 	return lw.ResponseWriter
 }
 
-// clientIP extracts the remote IP from the request, stripping the port.
+// trustedProxy is the parsed CIDR network of a configured reverse proxy.
+// When non-nil, clientIP will trust X-Real-IP / X-Forwarded-For headers from
+// requests whose direct TCP peer falls within this network.
+var trustedProxy *net.IPNet
+
+// SetTrustedProxy configures the reverse-proxy IP or CIDR that is allowed to
+// supply X-Real-IP / X-Forwarded-For headers. Pass an empty string to disable
+// (default). Must be called before the server starts accepting requests.
+func SetTrustedProxy(cidr string) {
+	if cidr == "" {
+		trustedProxy = nil
+		return
+	}
+	// Accept a bare IP address by converting it to a host CIDR.
+	if net.ParseIP(cidr) != nil {
+		if strings.Contains(cidr, ":") {
+			cidr += "/128" // IPv6
+		} else {
+			cidr += "/32" // IPv4
+		}
+	}
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		log.Printf("trusted-proxy: invalid value %q, proxy IP forwarding disabled: %v", cidr, err)
+		return
+	}
+	trustedProxy = network
+}
+
+// clientIP extracts the real client IP from the request.
+//
+// When a trusted proxy is configured and the direct TCP peer (RemoteAddr)
+// falls within that proxy's network, the function reads the real client IP
+// from X-Real-IP first, then the left-most entry of X-Forwarded-For. This
+// prevents untrusted clients from spoofing their IP by injecting those headers
+// directly — only requests that actually arrive from the configured proxy are
+// allowed to influence the result.
+//
+// When no trusted proxy is configured, RemoteAddr is always used.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
 	}
+
+	if trustedProxy != nil {
+		peerIP := net.ParseIP(host)
+		if peerIP != nil && trustedProxy.Contains(peerIP) {
+			// X-Real-IP is set by nginx's proxy_set_header X-Real-IP directive.
+			if xri := strings.TrimSpace(r.Header.Get("X-Real-IP")); xri != "" {
+				if ip := net.ParseIP(xri); ip != nil {
+					return ip.String()
+				}
+			}
+			// X-Forwarded-For may be a comma-separated list; the left-most
+			// entry is the original client IP.
+			if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+				if idx := strings.IndexByte(xff, ','); idx != -1 {
+					xff = xff[:idx]
+				}
+				if ip := net.ParseIP(strings.TrimSpace(xff)); ip != nil {
+					return ip.String()
+				}
+			}
+		}
+	}
+
 	return host
 }

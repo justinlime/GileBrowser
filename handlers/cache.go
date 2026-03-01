@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -283,20 +284,104 @@ func invalidateIndex() {
 // Startup cache warming
 // ---------------------------------------------------------------------------
 
-// collectDirs sends root and every subdirectory beneath it into dirs.
-// It is used by WarmCache to discover paths for size pre-warming without
-// retaining a full FileIndex in memory.
-func collectDirs(root string, dirs chan<- string) {
-	dirs <- root
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return
+// buildSizeIndex performs a single depth-first walk of root and returns a map
+// from absolute directory path to its total recursive byte count.
+//
+// Previous approach: collectDirs enumerated all directories into a channel,
+// then a worker pool called cachedDirSize (→ dirSize → WalkDir) on each one
+// independently. For a tree with N directories the root's walk touched all N
+// nodes, its children each touched their subtrees, and so on — O(n²) total
+// walk work with up to 8 concurrent WalkDir goroutines pinning memory at once.
+//
+// This approach: one WalkDir visit per filesystem entry, total.
+//  1. Walk pass: for each regular file, add its size to its immediate parent
+//     directory's running total in a local map. Symlinks-to-directories are
+//     handled by calling the existing dirSize helper (which resolves the target
+//     and handles nested symlinks), recording the result under the symlink path,
+//     and marking it terminal so step 2 does not double-count it.
+//  2. Propagation pass: sort all directory paths by length descending (a child
+//     path is always strictly longer than its parent's), then sweep once,
+//     adding each directory's subtotal to its parent. Terminal entries are
+//     skipped because their contribution was already applied in step 1.
+//
+// Result: O(n) walk work, one goroutine, peak RAM proportional to the number
+// of directories (one int64 per directory in the local map).
+func buildSizeIndex(root string) map[string]int64 {
+	sizes := make(map[string]int64)
+	terminal := make(map[string]bool) // symlink-dirs: already applied to parent in step 1
+
+	// Seed the root so it always appears in the map even if empty.
+	sizes[root] = 0
+
+	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		// Real directory: ensure it has an entry so empty dirs are cached.
+		if d.IsDir() {
+			if _, ok := sizes[p]; !ok {
+				sizes[p] = 0
+			}
+			return nil
+		}
+
+		// Symlink: WalkDir uses Lstat so it does not descend into symlinked
+		// directories automatically — we handle them explicitly here.
+		if d.Type()&os.ModeSymlink != 0 {
+			resolved, err := filepath.EvalSymlinks(p)
+			if err != nil {
+				return nil
+			}
+			fi, err := os.Stat(resolved)
+			if err != nil {
+				return nil
+			}
+			parent := filepath.Dir(p)
+			if fi.IsDir() {
+				// Symlink to a directory: delegate to dirSize (which handles
+				// further nested symlinks), record the total under the symlink
+				// path so callers using that path get a cache hit, and mark it
+				// terminal so the propagation pass does not add it to the
+				// parent a second time.
+				sz := dirSize(resolved)
+				sizes[p] = sz
+				terminal[p] = true
+				sizes[parent] += sz
+			} else {
+				sizes[parent] += fi.Size()
+			}
+			return nil
+		}
+
+		// Regular file: accumulate size into the immediate parent directory.
+		if fi, err := d.Info(); err == nil {
+			sizes[filepath.Dir(p)] += fi.Size()
+		}
+		return nil
+	})
+
+	// Propagation pass: roll each directory's subtotal up to its parent.
+	// Sorting by descending path length guarantees children before parents
+	// because a child's clean path is always strictly longer than its parent's.
+	dirs := make([]string, 0, len(sizes))
+	for d := range sizes {
+		dirs = append(dirs, d)
 	}
-	for _, e := range entries {
-		if entryIsDir(root, e) {
-			collectDirs(filepath.Join(root, e.Name()), dirs)
+	sort.Slice(dirs, func(i, j int) bool {
+		return len(dirs[i]) > len(dirs[j])
+	})
+	for _, d := range dirs {
+		if terminal[d] {
+			continue // contribution already applied to parent during walk pass
+		}
+		parent := filepath.Dir(d)
+		if parent != d { // guard: filepath.Dir of a filesystem root returns itself
+			sizes[parent] += sizes[d]
 		}
 	}
+
+	return sizes
 }
 
 // WarmCache pre-populates the directory-size cache and the search index in
@@ -316,31 +401,23 @@ func WarmCache(roots map[string]string) {
 		indexCache.expires = time.Now().Add(safetyTTL)
 		indexCache.mu.Unlock()
 
-		// Pre-populate size cache for every directory the index knows about,
-		// plus each root itself. A worker pool bounds the parallelism.
-		const workers = 8
-		dirs := make(chan string, 512)
-
-		var wg sync.WaitGroup
-		for i := 0; i < workers; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for d := range dirs {
-					cachedDirSize(d)
-				}
-			}()
-		}
-
-		// Walk each root to collect all directory paths for size warming.
-		// This mirrors what buildIndex does but only retains directories,
-		// avoiding the need to keep (or decode) a full FileIndex in memory.
+		// Pre-populate the size cache with a single bottom-up walk per root.
+		// buildSizeIndex is O(n) in the number of filesystem entries; all results
+		// are bulk-inserted into the cache under one lock acquisition per root,
+		// bypassing the cachedDirSize hot path entirely.
+		expiry := time.Now().Add(safetyTTL)
 		for _, fsRoot := range roots {
-			collectDirs(fsRoot, dirs)
+			sizeIndex := buildSizeIndex(fsRoot)
+			sizeCache.mu.Lock()
+			for p, sz := range sizeIndex {
+				sizeCache.entries[p] = &sizeEntry{
+					size:    sz,
+					expires: expiry,
+				}
+			}
+			sizeCache.mu.Unlock()
 		}
 
-		close(dirs)
-		wg.Wait()
 		log.Println("cache: warming complete")
 	}()
 }

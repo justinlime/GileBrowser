@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"time"
 
 	"gileserver/config"
 	"gileserver/handlers"
@@ -52,9 +53,18 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 
 	mux := http.NewServeMux()
 	registerRoutes(mux, roots, cfg.Theme, cfg.Title, cfg.FaviconPath, cfg.DefaultTheme, bwManager, previewOpts, tmpl)
+	wrappedMux := securityHeaders(mux)
 
 	// Load persisted download statistics before any handler runs.
 	handlers.InitStats(cfg.StatsDir)
+
+	// Configure reverse-proxy IP forwarding before any request is served.
+	handlers.SetTrustedProxy(cfg.TrustedProxy)
+
+	// Configure the document renderer (Markdown/Org-mode) with the active
+	// Chroma theme and the preview-images setting. Must be called before
+	// any preview request is served.
+	handlers.InitRenderOptions(cfg.Theme, cfg.PreviewImages)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
 	logStartup(cfg, roots, addr)
@@ -69,7 +79,28 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 		log.Printf("watcher: could not start filesystem watcher: %v", err)
 	}
 
-	return http.ListenAndServe(addr, mux)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: wrappedMux,
+
+		// ReadHeaderTimeout caps how long the server waits for a client to
+		// finish sending HTTP headers. This is the primary Slowloris defence:
+		// a client that trickles headers one byte at a time will be
+		// disconnected after this deadline regardless of how slowly it writes.
+		ReadHeaderTimeout: 20 * time.Second,
+
+		// IdleTimeout closes keep-alive connections that have been idle for
+		// this duration, reclaiming goroutines and file descriptors from
+		// clients that connect but stop sending requests.
+		IdleTimeout: 120 * time.Second,
+
+		// WriteTimeout is intentionally absent. File downloads and ZIP streams
+		// can legitimately take hours for large transfers; a write deadline
+		// would terminate in-progress downloads. The bandwidth limiter already
+		// ensures slow readers do not hold unlimited server resources, and
+		// IdleTimeout handles truly dead connections.
+	}
+	return srv.ListenAndServe()
 }
 
 // logStartup prints a structured summary of the active configuration.

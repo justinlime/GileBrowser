@@ -5,6 +5,7 @@ package config
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -43,6 +44,13 @@ type Config struct {
 	// rendered as rich documents. When false they fall back to syntax
 	// highlighting (if PreviewText is enabled) or the binary info-card.
 	PreviewDocs bool
+	// TrustedProxy is an optional IP address or CIDR range of a trusted
+	// reverse proxy (e.g. "127.0.0.1" or "10.0.0.0/8"). When set, the server
+	// reads the real client IP from the X-Real-IP or X-Forwarded-For header
+	// for requests that arrive from that proxy. Requests from any other source
+	// are not affected — their RemoteAddr is used directly. Leave empty when
+	// GileBrowser is accessed directly without a reverse proxy.
+	TrustedProxy string
 }
 
 // dirList is a custom flag.Value that can be set multiple times.
@@ -70,6 +78,7 @@ func Load() (*Config, error) {
 	previewImagesFlag  := flag.String("preview-images", "", "Enable inline image previews: true or false (env: GILE_PREVIEW_IMAGES, default: true)")
 	previewTextFlag    := flag.String("preview-text", "", "Enable syntax-highlighted text previews: true or false (env: GILE_PREVIEW_TEXT, default: true)")
 	previewDocsFlag    := flag.String("preview-docs", "", "Enable rendered document previews (Markdown, Org, HTML): true or false (env: GILE_PREVIEW_DOCS, default: true)")
+	trustedProxyFlag   := flag.String("trusted-proxy", "", "IP or CIDR of a trusted reverse proxy for X-Forwarded-For (env: GILE_TRUSTED_PROXY)")
 	flag.Var(&dirs, "dir", "Root directory to serve (repeatable; env: GILE_DIRS, colon-separated)")
 	flag.Parse()
 
@@ -207,6 +216,17 @@ func Load() (*Config, error) {
 	// --- preview-docs ---
 	previewDocs := parseBoolFlag(*previewDocsFlag, "GILE_PREVIEW_DOCS", true)
 
+	// --- trusted-proxy ---
+	trustedProxy := *trustedProxyFlag
+	if trustedProxy == "" {
+		trustedProxy = os.Getenv("GILE_TRUSTED_PROXY")
+	}
+	if trustedProxy != "" {
+		if err := validateProxy(trustedProxy); err != nil {
+			return nil, fmt.Errorf("invalid --trusted-proxy %q: %w", trustedProxy, err)
+		}
+	}
+
 	return &Config{
 		Port:           port,
 		Dirs:           []string(dirs),
@@ -219,7 +239,20 @@ func Load() (*Config, error) {
 		PreviewImages:  previewImages,
 		PreviewText:    previewText,
 		PreviewDocs:    previewDocs,
+		TrustedProxy:   trustedProxy,
 	}, nil
+}
+
+// validateProxy checks that s is either a valid IP address or a valid CIDR
+// range, returning an error if neither parses successfully.
+func validateProxy(s string) error {
+	if net.ParseIP(s) != nil {
+		return nil
+	}
+	if _, _, err := net.ParseCIDR(s); err == nil {
+		return nil
+	}
+	return fmt.Errorf("must be an IP address (e.g. 127.0.0.1) or CIDR range (e.g. 10.0.0.0/8)")
 }
 
 // parseBoolFlag resolves a boolean option from a CLI string flag value, with
