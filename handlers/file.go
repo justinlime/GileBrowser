@@ -142,9 +142,6 @@ func walkDir(rootName, fsRoot, dir string, idx *models.FileIndex) {
 		return
 	}
 	for _, e := range entries {
-		if len(e.Name()) > 0 && e.Name()[0] == '.' {
-			continue
-		}
 		rel, err := filepath.Rel(fsRoot, filepath.Join(dir, e.Name()))
 		if err != nil {
 			continue

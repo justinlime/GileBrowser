@@ -132,11 +132,6 @@ func buildEntries(roots map[string]string, urlPath, fsPath string) ([]models.Fil
 	// Pre-allocate and populate the slice without sizes yet.
 	entries := make([]models.FileEntry, 0, len(rawEntries))
 	for _, e := range rawEntries {
-		// Skip hidden files.
-		if strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-
 		fi, err := e.Info()
 		if err != nil {
 			continue

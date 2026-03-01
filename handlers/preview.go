@@ -59,15 +59,9 @@ func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme strin
 		if info.IsDir() {
 			pd.IsDir = true
 			pd.DownloadURL = "/zip" + urlPath
-			// Count direct (non-hidden) children.
+			// Count direct children.
 			if entries, err := os.ReadDir(fsPath); err == nil {
-				count := 0
-				for _, e := range entries {
-					if !strings.HasPrefix(e.Name(), ".") {
-						count++
-					}
-				}
-				pd.EntryCount = count
+				pd.EntryCount = len(entries)
 			}
 			// Directory size — served from cache to avoid blocking on a full walk.
 			pd.FileSize = cachedDirSize(fsPath)
