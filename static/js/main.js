@@ -13,30 +13,109 @@
   // ------------------------------------------------------------------ //
 
   /**
-   * Returns a score >= 0 if `pattern` fuzzy-matches `str`, or -1 otherwise.
-   * A higher score indicates a better match (consecutive chars score higher).
+   * scoreToken(token, str) → number
+   *
+   * Scores how well a single lowercase token matches a lowercase string.
+   * Returns -1 if the token cannot be matched at all.
+   *
+   * Scoring tiers (highest to lowest):
+   *   40 – exact substring match
+   *   20 – every character of the token appears at a word-boundary position
+   *        (start of string, or after a separator: / - _ . space)
+   *   1+ – standard fuzzy: characters appear in order, with a +4 bonus for
+   *        each consecutive pair and a +2 bonus whenever a match lands on a
+   *        word boundary
+   *
+   * A length-normalisation factor is applied so that a token that consumes
+   * most of a short field outscores the same token scattered across a long one.
    */
-  function fuzzyScore(pattern, str) {
-    pattern = pattern.toLowerCase();
-    str = str.toLowerCase();
+  function scoreToken(token, str) {
+    if (token.length === 0) return 0;
+    if (str.length === 0) return -1;
 
-    if (pattern.length === 0) return 0;
+    // Tier 1 – exact substring
+    if (str.indexOf(token) !== -1) return 40;
 
-    let score = 0;
-    let pi = 0; // pattern index
-    let lastMatch = -1;
+    // Precompute which positions are word-boundary starts.
+    // A boundary is: index 0, or the character after / - _ . or space.
+    var isBoundary = new Uint8Array(str.length);
+    isBoundary[0] = 1;
+    for (var i = 1; i < str.length; i++) {
+      var c = str[i - 1];
+      if (c === "/" || c === "-" || c === "_" || c === "." || c === " ") {
+        isBoundary[i] = 1;
+      }
+    }
 
-    for (let si = 0; si < str.length && pi < pattern.length; si++) {
-      if (str[si] === pattern[pi]) {
-        // Bonus for consecutive characters
-        score += (si === lastMatch + 1) ? 5 : 1;
+    // Tier 2 – all token chars match at boundary positions (acronym style).
+    // e.g. token "pom" matches "preview-org.md" via p→'p', o→'o', m→'m' all
+    // at boundary positions.
+    var pi = 0;
+    for (var si = 0; si < str.length && pi < token.length; si++) {
+      if (isBoundary[si] && str[si] === token[pi]) pi++;
+    }
+    if (pi === token.length) return 20;
+
+    // Tier 3 – standard fuzzy with bonuses.
+    var score = 0;
+    pi = 0;
+    var lastMatch = -1;
+    for (var si = 0; si < str.length && pi < token.length; si++) {
+      if (str[si] === token[pi]) {
+        var bonus = 1;
+        if (si === lastMatch + 1) bonus += 4; // consecutive
+        if (isBoundary[si])       bonus += 2; // word boundary
+        score += bonus;
         lastMatch = si;
         pi++;
       }
     }
+    if (pi < token.length) return -1; // not all chars matched
 
-    if (pi < pattern.length) return -1; // not all chars matched
-    return score;
+    // Normalise: prefer matches where the token "fills" more of the field.
+    return score * token.length / str.length;
+  }
+
+  /**
+   * multiTokenScore(query, entry) → number
+   *
+   * Splits the query into whitespace-separated tokens and scores each one
+   * against both the entry's filename (entry.name) and its full path
+   * (entry.path).  Every token must match somewhere — if any token fails
+   * to match both fields, the whole query scores -1 (no match).
+   *
+   * Each token contributes its best score (max of name-score and path-score),
+   * and the total is the sum across all tokens so that matching more words
+   * always wins over matching fewer.
+   *
+   * Examples:
+   *   query "org preview"  → file "preview-org.md"
+   *     token "org"     → scoreToken("org","preview-org.md") = exact → 40
+   *     token "preview" → scoreToken("preview","preview-org.md") = exact → 40
+   *     total = 80  ✓
+   *
+   *   query "drain notes"  → path "/example/notes/path/drain.md"
+   *     token "drain" → name "drain.md"  = exact → 40
+   *     token "notes" → path "…/notes/…" = exact → 40
+   *     total = 80  ✓
+   */
+  function multiTokenScore(query, entry) {
+    var tokens = query.toLowerCase().split(/\s+/).filter(function(t){ return t.length > 0; });
+    if (tokens.length === 0) return -1;
+
+    var nameLower = entry.name.toLowerCase();
+    var pathLower = entry.path.toLowerCase();
+
+    var total = 0;
+    for (var i = 0; i < tokens.length; i++) {
+      var tok = tokens[i];
+      var ns = scoreToken(tok, nameLower);
+      var ps = scoreToken(tok, pathLower);
+      var best = Math.max(ns, ps);
+      if (best < 0) return -1; // this token matched nowhere — reject entry
+      total += best;
+    }
+    return total;
   }
 
   // ------------------------------------------------------------------ //
@@ -110,15 +189,21 @@
   // Search                                                               //
   // ------------------------------------------------------------------ //
 
+  // Pending debounce timer id.  Any keystroke resets it so the search only
+  // runs once the user pauses for DEBOUNCE_MS — keeping the input responsive
+  // no matter how large the index is.
+  var searchTimer = null;
+  var DEBOUNCE_MS = 120;
+
   function doSearch(query) {
     if (!fileIndex || query.trim() === "") {
       hideResults();
       return;
     }
 
-    const scored = [];
+    var scored = [];
     fileIndex.forEach(function (entry) {
-      const score = fuzzyScore(query, entry.name);
+      var score = multiTokenScore(query, entry);
       if (score >= 0) {
         scored.push({ score: score, name: entry.name, path: entry.path });
       }
@@ -126,6 +211,15 @@
 
     scored.sort(function (a, b) { return b.score - a.score; });
     renderResults(scored);
+  }
+
+  function scheduleSearch(query) {
+    clearTimeout(searchTimer);
+    if (!query.trim()) {
+      hideResults();
+      return;
+    }
+    searchTimer = setTimeout(function () { doSearch(query); }, DEBOUNCE_MS);
   }
 
   // ------------------------------------------------------------------ //
@@ -168,12 +262,12 @@
 
   searchInput.addEventListener("input", function () {
     activeIdx = -1;
-    doSearch(searchInput.value);
+    scheduleSearch(searchInput.value);
   });
 
   searchInput.addEventListener("focus", function () {
     if (searchInput.value.trim()) {
-      doSearch(searchInput.value);
+      scheduleSearch(searchInput.value);
     }
   });
 

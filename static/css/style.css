@@ -341,13 +341,16 @@ a:hover {
 }
 
 .search-result-item {
-  display: block;
+  display: flex;
+  flex-direction: column;
   padding: 0.5rem 0.85rem;
   color: var(--text);
   border-bottom: 1px solid var(--border);
   font-size: 0.88rem;
   text-decoration: none;
   transition: background 0.1s;
+  overflow: hidden;
+  min-width: 0;
 }
 .search-result-item:last-child {
   border-bottom: none;
@@ -359,11 +362,18 @@ a:hover {
 }
 .search-result-item .result-name {
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .search-result-item .result-path {
   color: var(--text-muted);
   font-size: 0.78rem;
-  margin-left: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
 }
 .search-result-item.active .result-path {
   color: var(--ctp-base);
