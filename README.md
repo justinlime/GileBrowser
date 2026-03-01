@@ -125,7 +125,7 @@ docker run -d \
   -p 7887:7887 \
   -v /srv/files:/data/files \
   -e GILE_DIRS=/data/files \
-  ghcr.io/justinlime/gilebrowser:latest
+  docker.io/justinlime/gilebrowser:latest
 ```
 
 <details>
@@ -149,7 +149,7 @@ docker run -d \
   -e GILE_PREVIEW_IMAGES=true \
   -e GILE_PREVIEW_TEXT=true \
   -e GILE_PREVIEW_DOCS=true \
-  ghcr.io/justinlime/gilebrowser:latest
+  docker.io/justinlime/gilebrowser:latest
 ```
 
 </details>
@@ -160,7 +160,7 @@ docker run -d \
 ```yaml
 services:
   gilebrowser:
-    image: ghcr.io/justinlime/gilebrowser:latest
+    image: docker.io/justinlime/gilebrowser:latest
     container_name: gilebrowser
     restart: unless-stopped
     ports:
