@@ -1,122 +1,12 @@
 /**
- * main.js – client-side fuzzy search for GileBrowser.
+ * main.js – GileBrowser UI.
  *
- * No external dependencies.  The server provides a JSON index at /api/index.
- * We fetch it once, then filter entirely in-browser.
+ * Search is delegated entirely to search-worker.js so the scoring loop
+ * never runs on the main thread and cannot stall keyboard input.
  */
 
 (function () {
   "use strict";
-
-  // ------------------------------------------------------------------ //
-  // Fuzzy matching                                                       //
-  // ------------------------------------------------------------------ //
-
-  /**
-   * scoreToken(token, str) → number
-   *
-   * Scores how well a single lowercase token matches a lowercase string.
-   * Returns -1 if the token cannot be matched at all.
-   *
-   * Scoring tiers (highest to lowest):
-   *   40 – exact substring match
-   *   20 – every character of the token appears at a word-boundary position
-   *        (start of string, or after a separator: / - _ . space)
-   *   1+ – standard fuzzy: characters appear in order, with a +4 bonus for
-   *        each consecutive pair and a +2 bonus whenever a match lands on a
-   *        word boundary
-   *
-   * A length-normalisation factor is applied so that a token that consumes
-   * most of a short field outscores the same token scattered across a long one.
-   */
-  function scoreToken(token, str) {
-    if (token.length === 0) return 0;
-    if (str.length === 0) return -1;
-
-    // Tier 1 – exact substring
-    if (str.indexOf(token) !== -1) return 40;
-
-    // Precompute which positions are word-boundary starts.
-    // A boundary is: index 0, or the character after / - _ . or space.
-    var isBoundary = new Uint8Array(str.length);
-    isBoundary[0] = 1;
-    for (var i = 1; i < str.length; i++) {
-      var c = str[i - 1];
-      if (c === "/" || c === "-" || c === "_" || c === "." || c === " ") {
-        isBoundary[i] = 1;
-      }
-    }
-
-    // Tier 2 – all token chars match at boundary positions (acronym style).
-    // e.g. token "pom" matches "preview-org.md" via p→'p', o→'o', m→'m' all
-    // at boundary positions.
-    var pi = 0;
-    for (var si = 0; si < str.length && pi < token.length; si++) {
-      if (isBoundary[si] && str[si] === token[pi]) pi++;
-    }
-    if (pi === token.length) return 20;
-
-    // Tier 3 – standard fuzzy with bonuses.
-    var score = 0;
-    pi = 0;
-    var lastMatch = -1;
-    for (var si = 0; si < str.length && pi < token.length; si++) {
-      if (str[si] === token[pi]) {
-        var bonus = 1;
-        if (si === lastMatch + 1) bonus += 4; // consecutive
-        if (isBoundary[si])       bonus += 2; // word boundary
-        score += bonus;
-        lastMatch = si;
-        pi++;
-      }
-    }
-    if (pi < token.length) return -1; // not all chars matched
-
-    // Normalise: prefer matches where the token "fills" more of the field.
-    return score * token.length / str.length;
-  }
-
-  /**
-   * multiTokenScore(query, entry) → number
-   *
-   * Splits the query into whitespace-separated tokens and scores each one
-   * against both the entry's filename (entry.name) and its full path
-   * (entry.path).  Every token must match somewhere — if any token fails
-   * to match both fields, the whole query scores -1 (no match).
-   *
-   * Each token contributes its best score (max of name-score and path-score),
-   * and the total is the sum across all tokens so that matching more words
-   * always wins over matching fewer.
-   *
-   * Examples:
-   *   query "org preview"  → file "preview-org.md"
-   *     token "org"     → scoreToken("org","preview-org.md") = exact → 40
-   *     token "preview" → scoreToken("preview","preview-org.md") = exact → 40
-   *     total = 80  ✓
-   *
-   *   query "drain notes"  → path "/example/notes/path/drain.md"
-   *     token "drain" → name "drain.md"  = exact → 40
-   *     token "notes" → path "…/notes/…" = exact → 40
-   *     total = 80  ✓
-   */
-  function multiTokenScore(query, entry) {
-    var tokens = query.toLowerCase().split(/\s+/).filter(function(t){ return t.length > 0; });
-    if (tokens.length === 0) return -1;
-
-    var nameLower = entry.name.toLowerCase();
-    var pathLower = entry.path.toLowerCase();
-
-    var total = 0;
-    for (var i = 0; i < tokens.length; i++) {
-      var tok = tokens[i];
-      var ns = scoreToken(tok, nameLower);
-      var ps = scoreToken(tok, pathLower);
-      var best = Math.max(ns, ps);
-      if (best < 0) return -1; // this token matched nowhere — reject entry
-      total += best;
-    }
-    return total;
-  }
 
   // ------------------------------------------------------------------ //
   // DOM helpers                                                          //
@@ -190,57 +80,50 @@
   }
 
   // ------------------------------------------------------------------ //
-  // Index loading                                                        //
+  // Search worker                                                        //
   // ------------------------------------------------------------------ //
 
-  let fileIndex = null; // Array of {name, path, dir}
+  // Monotone counter — incremented on every query dispatch.  The worker
+  // echoes the id back with its response; any response whose id is less
+  // than lastId was superseded by a newer query and is discarded without
+  // touching the DOM.
+  var lastId = 0;
+  var worker = new Worker("/static/js/search-worker.js");
+
+  worker.onmessage = function (e) {
+    // Discard results that belong to a superseded query.
+    if (e.data.id < lastId) return;
+    renderResults(e.data.results);
+  };
+
+  worker.onerror = function (err) {
+    console.warn("GileBrowser: search worker error:", err.message);
+  };
+
+  function dispatchSearch(query) {
+    if (!query.trim()) {
+      hideResults();
+      return;
+    }
+    lastId++;
+    worker.postMessage({ type: "search", query: query, id: lastId });
+  }
+
+  // ------------------------------------------------------------------ //
+  // Index loading                                                        //
+  // ------------------------------------------------------------------ //
 
   function loadIndex() {
     fetch("/api/index")
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        fileIndex = data.files || [];
+        // Hand the entire index to the worker once — it keeps it in memory
+        // for all subsequent queries without any main-thread involvement.
+        worker.postMessage({ type: "index", data: data.files || [] });
       })
       .catch(function (err) {
         console.warn("GileBrowser: failed to load search index:", err);
       });
-  }
-
-  // ------------------------------------------------------------------ //
-  // Search                                                               //
-  // ------------------------------------------------------------------ //
-
-  // Pending debounce timer id.  Any keystroke resets it so the search only
-  // runs once the user pauses for DEBOUNCE_MS — keeping the input responsive
-  // no matter how large the index is.
-  var searchTimer = null;
-  var DEBOUNCE_MS = 120;
-
-  function doSearch(query) {
-    if (!fileIndex || query.trim() === "") {
-      hideResults();
-      return;
-    }
-
-    var scored = [];
-    fileIndex.forEach(function (entry) {
-      var score = multiTokenScore(query, entry);
-      if (score >= 0) {
-        scored.push({ score: score, name: entry.name, path: entry.path, size: entry.size });
-      }
-    });
-
-    scored.sort(function (a, b) { return b.score - a.score; });
-    renderResults(scored);
-  }
-
-  function scheduleSearch(query) {
-    clearTimeout(searchTimer);
-    if (!query.trim()) {
-      hideResults();
-      return;
-    }
-    searchTimer = setTimeout(function () { doSearch(query); }, DEBOUNCE_MS);
   }
 
   // ------------------------------------------------------------------ //
@@ -283,12 +166,12 @@
 
   searchInput.addEventListener("input", function () {
     activeIdx = -1;
-    scheduleSearch(searchInput.value);
+    dispatchSearch(searchInput.value);
   });
 
   searchInput.addEventListener("focus", function () {
     if (searchInput.value.trim()) {
-      scheduleSearch(searchInput.value);
+      dispatchSearch(searchInput.value);
     }
   });
 
@@ -340,6 +223,7 @@
   // ------------------------------------------------------------------ //
   // Global keyboard shortcut: press "/" to focus search                 //
   // ------------------------------------------------------------------ //
+
   document.addEventListener("keydown", function (e) {
     if (
       e.key === "/" &&
@@ -353,28 +237,24 @@
   });
 
   // ------------------------------------------------------------------ //
-  // Row click handling (all screen sizes)                              //
+  // Row click handling (all screen sizes)                               //
   // ------------------------------------------------------------------ //
+
   (function () {
     var fileTable = document.querySelector(".file-table");
     if (!fileTable) return;
 
     fileTable.addEventListener("click", function (e) {
-      // Find the closest row (tr) element
       var row = e.target.closest("tr");
       if (!row) return;
 
-      // Find the entry link in this row
       var entryLink = row.querySelector(".entry-link");
       if (!entryLink) return;
 
-      // If user clicked directly on a button, don't trigger row click
-      if (e.target.closest(".btn")) {
-        return;
-      }
+      if (e.target.closest(".btn")) return;
 
-      // Navigate to the entry link's URL
       window.location.href = entryLink.href;
     });
   })();
+
 })();
