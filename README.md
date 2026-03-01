@@ -1,17 +1,24 @@
 # GileBrowser
 
-A lightweight HTTP file server with a clean web UI. Browse, preview, and download files and directories from one or more configured root paths.
+A lightweight HTTP file server with a clean web UI. Browse, preview, and download files from one or more configured root directories.
 
-## Features
-
-- Serve multiple root directories over HTTP
-- Universal preview page for every file and directory
+- Multiple root directories served from a single instance
+- File and directory previews (images, syntax-highlighted text, rendered Markdown/Org/HTML)
 - Directory downloads as ZIP archives
-- Syntax highlighting for text files via Chroma (server-side rendered)
-- Rich document rendering for Markdown, Org-mode, and HTML files
-- Inline image previews
 - Fuzzy file search across all served directories
+- Bandwidth limiting
+- Download statistics persisted to disk
 - All assets embedded in the binary — no runtime dependencies
+
+## Table of Contents
+
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Docker](#docker)
+- [Building](#building)
+- [Troubleshooting](#troubleshooting)
+
+---
 
 ## Usage
 
@@ -19,51 +26,94 @@ A lightweight HTTP file server with a clean web UI. Browse, preview, and downloa
 gilebrowser --dir /path/to/files
 ```
 
-Serve multiple directories:
+Multiple directories:
 
 ```sh
 gilebrowser --dir /srv/media --dir /srv/docs
 ```
 
-Custom port and highlight theme:
+Custom port and theme:
 
 ```sh
 gilebrowser --port 8080 --highlight-theme catppuccin-latte --dir /srv/files
 ```
 
+---
+
 ## Configuration
 
-Flags take precedence over environment variables. All preview types are **enabled by default**.
+Flags take precedence over environment variables. All preview flags default to `true`.
 
 | Flag | Env | Default | Description |
 |------|-----|---------|-------------|
 | `--port` | `GILE_PORT` | `7887` | HTTP port to listen on |
 | `--dir` | `GILE_DIRS` | — | Root directory to serve (repeatable; env is colon-separated) |
-| `--bandwidth` | `GILE_BANDWIDTH` | unlimited | Total upload cap shared across all clients (e.g. `10mbps`, `500kbps`, `1gbps`) |
-| `--highlight-theme` | `GILE_HIGHLIGHT_THEME` | `catppuccin-mocha` | Chroma syntax-highlight theme |
+| `--bandwidth` | `GILE_BANDWIDTH` | unlimited | Server-wide upload cap, e.g. `10mbps`, `500kbps`, `1gbps` |
 | `--title` | `GILE_TITLE` | `GileBrowser` | Site name shown in the header and page titles |
-| `--favicon` | `GILE_FAVICON` | — | Path to a custom favicon file (PNG, SVG, ICO, etc.) |
-| `--default-theme` | `GILE_DEFAULT_THEME` | `dark` | Default UI colour scheme for first-time visitors: `dark` (Catppuccin Mocha) or `light` (Catppuccin Latte). Clients can override this with the in-page toggle, which is remembered in their browser. |
-| `--stats-dir` | `GILE_STATS_DIR` | current working directory | Directory in which `gile.json` is stored to persist download statistics (total downloads and bytes served) across restarts. The file is created automatically on startup if it does not exist. |
-| `--preview-images` | `GILE_PREVIEW_IMAGES` | `true` | Enable inline image previews. When `false`, image files show a download info card instead. |
-| `--preview-text` | `GILE_PREVIEW_TEXT` | `true` | Enable syntax-highlighted text and code previews. When `false`, all text files show a download info card instead. |
-| `--preview-docs` | `GILE_PREVIEW_DOCS` | `true` | Enable rich rendered document previews for Markdown (`.md`), Org-mode (`.org`), and HTML (`.html`) files. When `false`, those files fall back to syntax highlighting (if `--preview-text` is enabled) or the download info card. Has no effect if `--preview-text` is also `false`. |
+| `--default-theme` | `GILE_DEFAULT_THEME` | `dark` | Default UI colour scheme: `dark` or `light`. Overridable per-client via the in-page toggle. |
+| `--highlight-theme` | `GILE_HIGHLIGHT_THEME` | `catppuccin-mocha` | Chroma syntax-highlight theme |
+| `--favicon` | `GILE_FAVICON` | — | Path to a custom favicon (PNG, SVG, ICO, etc.) |
+| `--stats-dir` | `GILE_STATS_DIR` | current working directory | Directory where `gile.json` is written. Created on startup if absent. |
+| `--preview-images` | `GILE_PREVIEW_IMAGES` | `true` | Render image files inline |
+| `--preview-text` | `GILE_PREVIEW_TEXT` | `true` | Render text and code files with syntax highlighting |
+| `--preview-docs` | `GILE_PREVIEW_DOCS` | `true` | Render Markdown, Org-mode, and HTML files as documents. Falls back to syntax highlighting if `--preview-text` is enabled, otherwise shows an info card. |
 
 `GILE_DIRS` accepts colon-separated paths: `GILE_DIRS=/srv/a:/srv/b`
 
-Boolean flags and environment variables accept: `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off` (case-insensitive).
+Boolean options accept: `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off` (case-insensitive).
 
-### Preview behaviour matrix
+<details>
+<summary>Preview behaviour matrix</summary>
 
-| `--preview-images` | `--preview-text` | `--preview-docs` | Image files | Text / code files | Markdown / Org / HTML |
-|--------------------|------------------|------------------|-------------|-------------------|-----------------------|
-| `true` | `true` | `true` | Inline image | Syntax highlighted | Rendered document |
-| `true` | `true` | `false` | Inline image | Syntax highlighted | Syntax highlighted |
-| `true` | `false` | `true` | Inline image | Info card | Info card |
-| `true` | `false` | `false` | Inline image | Info card | Info card |
-| `false` | `true` | `true` | Info card | Syntax highlighted | Rendered document |
-| `false` | `true` | `false` | Info card | Syntax highlighted | Syntax highlighted |
+| `--preview-images` | `--preview-text` | `--preview-docs` | Images | Text / code | Markdown / Org / HTML |
+|--------------------|------------------|------------------|--------|-------------|-----------------------|
+| `true` | `true` | `true` | Inline | Highlighted | Rendered |
+| `true` | `true` | `false` | Inline | Highlighted | Highlighted |
+| `true` | `false` | `true` | Inline | Info card | Info card |
+| `true` | `false` | `false` | Inline | Info card | Info card |
+| `false` | `true` | `true` | Info card | Highlighted | Rendered |
+| `false` | `true` | `false` | Info card | Highlighted | Highlighted |
 | `false` | `false` | `false` | Info card | Info card | Info card |
+
+</details>
+
+<details>
+<summary>Available highlight themes</summary>
+
+| Theme | Style |
+|-------|-------|
+| `catppuccin-mocha` | Dark — muted blue (default) |
+| `catppuccin-macchiato` | Dark — slightly warmer |
+| `catppuccin-frappe` | Medium dark |
+| `catppuccin-latte` | Light |
+| `dracula` | Dark purple |
+| `monokai` | Classic dark |
+| `github` | Light |
+| `github-dark` | Dark |
+| `nord` | Arctic dark |
+| `nordic` | Nord variant |
+| `onedark` | One Dark |
+| `tokyonight-night` | Tokyo Night |
+| `tokyonight-storm` | Tokyo Night Storm |
+| `tokyonight-moon` | Tokyo Night Moon |
+| `tokyonight-day` | Light |
+| `gruvbox` | Dark warm |
+| `gruvbox-light` | Light warm |
+| `rose-pine` | Dark |
+| `rose-pine-moon` | Dark variant |
+| `rose-pine-dawn` | Light |
+| `solarized-dark` | Solarized Dark |
+| `solarized-light` | Solarized Light |
+| `vim` | Vim default |
+| `emacs` | Emacs default |
+| `xcode` | Light |
+| `xcode-dark` | Dark |
+
+Any name from Chroma's full style registry is accepted.
+
+</details>
+
+---
 
 ## Docker
 
@@ -78,7 +128,8 @@ docker run -d \
   ghcr.io/justinlime/gilebrowser:latest
 ```
 
-### Full example with all options
+<details>
+<summary>Full example</summary>
 
 ```sh
 docker run -d \
@@ -87,6 +138,7 @@ docker run -d \
   -p 7887:7887 \
   -v /srv/media:/data/media:ro \
   -v /srv/docs:/data/docs:ro \
+  -v /srv/stats:/data/stats \
   -e GILE_DIRS=/data/media:/data/docs \
   -e GILE_PORT=7887 \
   -e GILE_TITLE=MyFiles \
@@ -97,11 +149,13 @@ docker run -d \
   -e GILE_PREVIEW_IMAGES=true \
   -e GILE_PREVIEW_TEXT=true \
   -e GILE_PREVIEW_DOCS=true \
-  -v /srv/stats:/data/stats \
   ghcr.io/justinlime/gilebrowser:latest
 ```
 
-### Docker Compose
+</details>
+
+<details>
+<summary>Docker Compose</summary>
 
 ```yaml
 services:
@@ -128,65 +182,37 @@ services:
       GILE_PREVIEW_DOCS: "true"
 ```
 
-> **Tip:** Mount served directories with `:ro` (read-only) when the server only needs to serve them, preventing accidental modification from inside the container.
+</details>
 
-> **Stats persistence:** Mount a dedicated volume (e.g. `/srv/stats:/data/stats`) and set `GILE_STATS_DIR` to that path so `gile.json` is written there and survives container restarts and image upgrades.
+Mount served directories with `:ro` when writes are not needed. To persist download stats across restarts, mount a volume and point `GILE_STATS_DIR` at it.
 
-### Building the image locally
+### Building locally
 
 ```sh
 docker build -t gilebrowser .
 docker run -d -p 7887:7887 -v /srv/files:/data -e GILE_DIRS=/data gilebrowser
 ```
 
-## Available themes
-
-| Theme | Description |
-|-------|-------------|
-| `catppuccin-mocha` | Catppuccin Mocha (default) — dark, muted blue |
-| `catppuccin-macchiato` | Catppuccin Macchiato — dark, slightly warmer |
-| `catppuccin-frappe` | Catppuccin Frappe — medium-dark |
-| `catppuccin-latte` | Catppuccin Latte — light |
-| `dracula` | Dracula — dark purple |
-| `monokai` | Monokai — classic dark |
-| `github` | GitHub — light |
-| `github-dark` | GitHub Dark |
-| `nord` | Nord — arctic dark |
-| `nordic` | Nordic — nord variant |
-| `onedark` | One Dark |
-| `tokyonight-night` | Tokyo Night |
-| `tokyonight-storm` | Tokyo Night Storm |
-| `tokyonight-moon` | Tokyo Night Moon |
-| `tokyonight-day` | Tokyo Night Day — light |
-| `gruvbox` | Gruvbox — dark warm |
-| `gruvbox-light` | Gruvbox — light warm |
-| `rose-pine` | Rosé Pine — dark |
-| `rose-pine-moon` | Rosé Pine Moon |
-| `rose-pine-dawn` | Rosé Pine Dawn — light |
-| `solarized-dark` | Solarized Dark |
-| `solarized-light` | Solarized Light |
-| `vim` | Vim default |
-| `emacs` | Emacs default |
-| `xcode` | Xcode — light |
-| `xcode-dark` | Xcode Dark |
-
-Any other name from Chroma's full style registry is also accepted.
+---
 
 ## Building
+
+Requires Go 1.25+.
 
 ```sh
 go build -o gilebrowser .
 ```
 
-Requires Go 1.25+.
+---
 
 ## Troubleshooting
 
-### Watcher: inotify watch limit reached
+<details>
+<summary>Watcher: inotify watch limit reached</summary>
 
-GileBrowser uses the Linux kernel's `inotify` interface to watch served directories for filesystem changes, enabling instant cache invalidation without polling. Each watched directory consumes one inotify watch descriptor, and the kernel enforces a per-user limit via `fs.inotify.max_user_watches`.
+GileBrowser watches served directories with `inotify` for instant cache invalidation. Each subdirectory consumes one watch descriptor, and the kernel enforces a per-user limit via `fs.inotify.max_user_watches` (default: **8,192** on most distributions).
 
-The default on most distributions (Ubuntu, Alpine, Debian, etc.) is **8,192**. If a served directory tree contains more subdirectories than this limit allows — or if the budget is shared with other running processes (editors, build tools, etc.) — you will see this message in the server log:
+When the limit is hit, the following is logged:
 
 ```
 watcher: inotify watch limit reached (stopped at <path>).
@@ -194,25 +220,23 @@ watcher: inotify watch limit reached (stopped at <path>).
   the 20m0s safety TTL will still correct any stale entries.
 ```
 
-**Impact:** Directories that could not be watched fall back to a 20-minute periodic cache refresh. The server continues to function normally; only the immediacy of cache invalidation is reduced for those paths.
+Unwatched directories fall back to a 20-minute cache TTL. The server continues to function normally.
 
-**Fix:** Raise the limit on the host machine. This cannot be changed from inside a Docker container as it is a kernel-level parameter that must be set on the host.
-
-To raise it temporarily (resets on reboot):
+Raise the limit on the host (cannot be changed from inside a container):
 
 ```sh
+# Temporary
 sudo sysctl -w fs.inotify.max_user_watches=524288
-```
 
-To make it permanent:
-
-```sh
+# Permanent
 echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 ```
 
-The value `524288` is a common recommendation and covers most use cases. For extremely large trees (such as `/nix/store`) an even higher value may be needed. To check the current limit:
+Check the current limit:
 
 ```sh
 cat /proc/sys/fs/inotify/max_user_watches
 ```
+
+</details>
