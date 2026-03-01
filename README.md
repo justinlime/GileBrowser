@@ -44,7 +44,7 @@ Flags take precedence over environment variables. All preview types are **enable
 | `--title` | `GILE_TITLE` | `GileBrowser` | Site name shown in the header and page titles |
 | `--favicon` | `GILE_FAVICON` | — | Path to a custom favicon file (PNG, SVG, ICO, etc.) |
 | `--default-theme` | `GILE_DEFAULT_THEME` | `dark` | Default UI colour scheme for first-time visitors: `dark` (Catppuccin Mocha) or `light` (Catppuccin Latte). Clients can override this with the in-page toggle, which is remembered in their browser. |
-| `--stats-file` | `GILE_STATS_FILE` | `gilebrowser-stats.json` | Path to the JSON file used to persist download statistics (total downloads and bytes served) across restarts. Created automatically on startup if it does not exist. |
+| `--stats-dir` | `GILE_STATS_DIR` | current working directory | Directory in which `gile.json` is stored to persist download statistics (total downloads and bytes served) across restarts. The file is created automatically on startup if it does not exist. |
 | `--preview-images` | `GILE_PREVIEW_IMAGES` | `true` | Enable inline image previews. When `false`, image files show a download info card instead. |
 | `--preview-text` | `GILE_PREVIEW_TEXT` | `true` | Enable syntax-highlighted text and code previews. When `false`, all text files show a download info card instead. |
 | `--preview-docs` | `GILE_PREVIEW_DOCS` | `true` | Enable rich rendered document previews for Markdown (`.md`), Org-mode (`.org`), and HTML (`.html`) files. When `false`, those files fall back to syntax highlighting (if `--preview-text` is enabled) or the download info card. Has no effect if `--preview-text` is also `false`. |
@@ -93,7 +93,7 @@ docker run -d \
   -e GILE_DEFAULT_THEME=dark \
   -e GILE_HIGHLIGHT_THEME=catppuccin-mocha \
   -e GILE_BANDWIDTH=100mbps \
-  -e GILE_STATS_FILE=/data/stats/gilebrowser-stats.json \
+  -e GILE_STATS_DIR=/data/stats \
   -e GILE_PREVIEW_IMAGES=true \
   -e GILE_PREVIEW_TEXT=true \
   -e GILE_PREVIEW_DOCS=true \
@@ -122,7 +122,7 @@ services:
       GILE_DEFAULT_THEME: dark
       GILE_HIGHLIGHT_THEME: catppuccin-mocha
       GILE_BANDWIDTH: 100mbps
-      GILE_STATS_FILE: /data/stats/gilebrowser-stats.json
+      GILE_STATS_DIR: /data/stats
       GILE_PREVIEW_IMAGES: "true"
       GILE_PREVIEW_TEXT: "true"
       GILE_PREVIEW_DOCS: "true"
@@ -130,7 +130,7 @@ services:
 
 > **Tip:** Mount served directories with `:ro` (read-only) when the server only needs to serve them, preventing accidental modification from inside the container.
 
-> **Stats persistence:** Mount a dedicated volume (e.g. `/srv/stats:/data/stats`) and set `GILE_STATS_FILE` to a path inside it so download statistics survive container restarts and image upgrades.
+> **Stats persistence:** Mount a dedicated volume (e.g. `/srv/stats:/data/stats`) and set `GILE_STATS_DIR` to that path so `gile.json` is written there and survives container restarts and image upgrades.
 
 ### Building the image locally
 

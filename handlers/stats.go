@@ -28,12 +28,15 @@ var downloadStats struct {
 	path string
 }
 
-// InitStats loads the stats file from disk and keeps the path for future
-// writes.  If the file does not exist it is created immediately with zero
-// counters so that the path is visible on disk from the moment the server
-// starts and any permission problems surface right away rather than silently
-// at the time of the first download.
-func InitStats(filePath string) {
+// InitStats resolves the stats file path from the given directory, loads any
+// existing data from disk, and keeps the path for future writes.  If the file
+// does not exist it is created immediately with zero counters so that the path
+// is visible on disk from the moment the server starts and any permission
+// problems surface right away rather than silently at the time of the first
+// download.
+func InitStats(statsDir string) {
+	filePath := filepath.Join(statsDir, "gile.json")
+
 	downloadStats.mu.Lock()
 	defer downloadStats.mu.Unlock()
 

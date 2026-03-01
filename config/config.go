@@ -30,9 +30,9 @@ type Config struct {
 	// DefaultTheme is the UI colour scheme served to clients that have not
 	// expressed a preference yet.  Accepted values: "dark", "light".
 	DefaultTheme string
-	// StatsFile is the path to the JSON file used to persist download
-	// statistics across restarts.
-	StatsFile string
+	// StatsDir is the directory in which the gile.json statistics file is
+	// stored. Defaults to the current working directory when empty.
+	StatsDir string
 	// PreviewImages controls whether image files are rendered inline.
 	// When false, image files fall back to the binary info-card.
 	PreviewImages bool
@@ -66,7 +66,7 @@ func Load() (*Config, error) {
 	faviconFlag        := flag.String("favicon", "", "Path to a custom favicon file (env: GILE_FAVICON)")
 	bandwidthFlag      := flag.String("bandwidth", "", "Total upload bandwidth cap, e.g. 10mbps, 500kbps, 1gbps (env: GILE_BANDWIDTH, default: unlimited)")
 	defaultThemeFlag   := flag.String("default-theme", "", "Default UI theme for new visitors: dark or light (env: GILE_DEFAULT_THEME, default: dark)")
-	statsFileFlag      := flag.String("stats-file", "", "Path to the download-statistics JSON file (env: GILE_STATS_FILE, default: gilebrowser-stats.json)")
+	statsDirFlag       := flag.String("stats-dir", "", "Directory in which gile.json is stored (env: GILE_STATS_DIR, default: current working directory)")
 	previewImagesFlag  := flag.String("preview-images", "", "Enable inline image previews: true or false (env: GILE_PREVIEW_IMAGES, default: true)")
 	previewTextFlag    := flag.String("preview-text", "", "Enable syntax-highlighted text previews: true or false (env: GILE_PREVIEW_TEXT, default: true)")
 	previewDocsFlag    := flag.String("preview-docs", "", "Enable rendered document previews (Markdown, Org, HTML): true or false (env: GILE_PREVIEW_DOCS, default: true)")
@@ -184,13 +184,17 @@ func Load() (*Config, error) {
 		bandwidthBps = bps
 	}
 
-	// --- stats-file ---
-	statsFile := *statsFileFlag
-	if statsFile == "" {
-		if v := os.Getenv("GILE_STATS_FILE"); v != "" {
-			statsFile = v
+	// --- stats-dir ---
+	statsDir := *statsDirFlag
+	if statsDir == "" {
+		if v := os.Getenv("GILE_STATS_DIR"); v != "" {
+			statsDir = v
 		} else {
-			statsFile = "gilebrowser-stats.json"
+			cwd, err := os.Getwd()
+			if err != nil {
+				return nil, fmt.Errorf("could not determine current working directory: %w", err)
+			}
+			statsDir = cwd
 		}
 	}
 
@@ -211,7 +215,7 @@ func Load() (*Config, error) {
 		FaviconPath:    favicon,
 		BandwidthLimit: bandwidthBps,
 		DefaultTheme:   defaultTheme,
-		StatsFile:      statsFile,
+		StatsDir:       statsDir,
 		PreviewImages:  previewImages,
 		PreviewText:    previewText,
 		PreviewDocs:    previewDocs,
