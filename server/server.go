@@ -47,6 +47,9 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 	mux := http.NewServeMux()
 	registerRoutes(mux, roots, cfg.Theme, cfg.Title, cfg.FaviconPath, cfg.DefaultTheme, bwManager, tmpl)
 
+	// Load persisted download statistics before any handler runs.
+	handlers.InitStats(cfg.StatsFile)
+
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
 	logStartup(cfg, roots, addr)
 

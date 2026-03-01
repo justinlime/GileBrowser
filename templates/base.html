@@ -23,6 +23,13 @@
   <main class="container">
     {{block "content" .}}{{end}}
   </main>
+  {{with downloadStats}}
+  <footer class="stats-banner">
+    <span class="stats-item">{{.TotalDownloads}} downloads</span>
+    <span class="stats-sep"></span>
+    <span class="stats-item">{{humanSize .TotalBytes}} served</span>
+  </footer>
+  {{end}}
   <script src="/static/js/main.js"></script>
 </body>
 </html>

@@ -30,6 +30,9 @@ type Config struct {
 	// DefaultTheme is the UI colour scheme served to clients that have not
 	// expressed a preference yet.  Accepted values: "dark", "light".
 	DefaultTheme string
+	// StatsFile is the path to the JSON file used to persist download
+	// statistics across restarts.
+	StatsFile string
 }
 
 // dirList is a custom flag.Value that can be set multiple times.
@@ -53,6 +56,7 @@ func Load() (*Config, error) {
 	faviconFlag      := flag.String("favicon", "", "Path to a custom favicon file (env: GILE_FAVICON)")
 	bandwidthFlag    := flag.String("bandwidth", "", "Total upload bandwidth cap, e.g. 10mbps, 500kbps, 1gbps (env: GILE_BANDWIDTH, default: unlimited)")
 	defaultThemeFlag := flag.String("default-theme", "", "Default UI theme for new visitors: dark or light (env: GILE_DEFAULT_THEME, default: dark)")
+	statsFileFlag    := flag.String("stats-file", "", "Path to the download-statistics JSON file (env: GILE_STATS_FILE, default: gilebrowser-stats.json)")
 	flag.Var(&dirs, "dir", "Root directory to serve (repeatable; env: GILE_DIRS, colon-separated)")
 	flag.Parse()
 
@@ -167,6 +171,16 @@ func Load() (*Config, error) {
 		bandwidthBps = bps
 	}
 
+	// --- stats-file ---
+	statsFile := *statsFileFlag
+	if statsFile == "" {
+		if v := os.Getenv("GILE_STATS_FILE"); v != "" {
+			statsFile = v
+		} else {
+			statsFile = "gilebrowser-stats.json"
+		}
+	}
+
 	return &Config{
 		Port:           port,
 		Dirs:           []string(dirs),
@@ -175,6 +189,7 @@ func Load() (*Config, error) {
 		FaviconPath:    favicon,
 		BandwidthLimit: bandwidthBps,
 		DefaultTheme:   defaultTheme,
+		StatsFile:      statsFile,
 	}, nil
 }
 

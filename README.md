@@ -42,6 +42,7 @@ Flags take precedence over environment variables.
 | `--title` | `GILE_TITLE` | `GileBrowser` | Site name shown in the header and page titles |
 | `--favicon` | `GILE_FAVICON` | — | Path to a custom favicon file (PNG, SVG, ICO, etc.) |
 | `--default-theme` | `GILE_DEFAULT_THEME` | `dark` | Default UI colour scheme for first-time visitors: `dark` (Catppuccin Mocha) or `light` (Catppuccin Latte). Clients can override this with the in-page toggle, which is remembered in their browser. |
+| `--stats-file` | `GILE_STATS_FILE` | `gilebrowser-stats.json` | Path to the JSON file used to persist download statistics (total downloads and bytes served) across restarts. Created automatically on startup if it does not exist. |
 
 `GILE_DIRS` accepts colon-separated paths: `GILE_DIRS=/srv/a:/srv/b`
 
@@ -98,10 +99,10 @@ The default on most distributions (Ubuntu, Alpine, Debian, etc.) is **8,192**. I
 ```
 watcher: inotify watch limit reached (stopped at <path>).
   Directories beyond this point will not receive instant cache invalidation;
-  the 5m0s safety TTL will still correct any stale entries.
+  the 20m0s safety TTL will still correct any stale entries.
 ```
 
-**Impact:** Directories that could not be watched fall back to a 5-minute periodic cache refresh. The server continues to function normally; only the immediacy of cache invalidation is reduced for those paths.
+**Impact:** Directories that could not be watched fall back to a 20-minute periodic cache refresh. The server continues to function normally; only the immediacy of cache invalidation is reduced for those paths.
 
 **Fix:** Raise the limit on the host machine. This cannot be changed from inside a Docker container as it is a kernel-level parameter that must be set on the host.
 

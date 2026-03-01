@@ -25,12 +25,15 @@ func ZipHandler(roots map[string]string, siteName string) http.HandlerFunc {
 
 		// Special case: zip everything when the server root is requested.
 		if urlPath == "/" {
-			log.Printf("zip  download   ip=%-15s  dir=/ (all roots)", ip)
-			start := time.Now()
-			zipAll(w, roots, siteName)
-			log.Printf("zip  complete   ip=%-15s  duration=%s  dir=/ (all roots)",
-				ip, time.Since(start).Round(time.Millisecond))
-			return
+					log.Printf("zip  download   ip=%-15s  dir=/ (all roots)", ip)
+					start := time.Now()
+					n := zipAll(w, roots, siteName)
+					if n > 0 {
+						RecordDownload(n)
+					}
+					log.Printf("zip  complete   ip=%-15s  duration=%s  dir=/ (all roots)",
+						ip, time.Since(start).Round(time.Millisecond))
+					return
 		}
 
 		fsPath, err := resolvePath(roots, urlPath)
@@ -55,8 +58,11 @@ func ZipHandler(roots map[string]string, siteName string) http.HandlerFunc {
 			return
 		}
 
-		if err := streamZip(w, entries, dirName); err != nil {
+		n, err := streamZip(w, entries, dirName)
+		if err != nil {
 			log.Printf("zip  error      ip=%-15s  dir=%s  err=%v", ip, urlPath, err)
+		} else {
+			RecordDownload(n)
 		}
 		log.Printf("zip  complete   ip=%-15s  duration=%s  dir=%s",
 			ip, time.Since(start).Round(time.Millisecond), urlPath)
@@ -66,7 +72,8 @@ func ZipHandler(roots map[string]string, siteName string) http.HandlerFunc {
 // zipAll bundles every configured root directory into a single archive named
 // after siteName. Each root is placed under its own top-level folder inside
 // the archive (e.g. rootName/subdir/file.txt).
-func zipAll(w http.ResponseWriter, roots map[string]string, siteName string) {
+// It returns the number of bytes written, or 0 on error.
+func zipAll(w http.ResponseWriter, roots map[string]string, siteName string) int64 {
 	var allEntries []zipEntry
 	for name, fsPath := range roots {
 		entries, err := collectEntries(fsPath, name)
@@ -74,7 +81,8 @@ func zipAll(w http.ResponseWriter, roots map[string]string, siteName string) {
 			allEntries = append(allEntries, entries...)
 		}
 	}
-	_ = streamZip(w, allEntries, siteName)
+	n, _ := streamZip(w, allEntries, siteName)
+	return n
 }
 
 // zipEntry describes a single file to be added to a ZIP archive.
@@ -146,18 +154,17 @@ func buildZip(w io.Writer, entries []zipEntry) error {
 // streamZip measures the exact ZIP size via a cheap dry-run pass over a
 // counting writer, sets Content-Length, then streams the real archive directly
 // to the client. No temp files or memory buffers are needed.
-func streamZip(w http.ResponseWriter, entries []zipEntry, name string) error {
+// It returns the number of bytes written and any error.
+func streamZip(w http.ResponseWriter, entries []zipEntry, name string) (int64, error) {
 	cw := &countingWriter{}
 	if err := buildZip(cw, entries); err != nil {
 		http.Error(w, "Could not build archive", http.StatusInternalServerError)
-		return err
+		return 0, err
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.zip"`, name))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", cw.n))
 
-	return buildZip(w, entries)
+	return cw.n, buildZip(w, entries)
 }
-
-

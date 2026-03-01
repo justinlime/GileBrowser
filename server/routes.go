@@ -26,8 +26,11 @@ func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, f
 	// ZIP download for directories (bandwidth-limited)
 	mux.Handle("/zip/", bw.Wrap(handlers.ZipHandler(roots, title)))
 
-	// File downloads (bandwidth-limited)
+	// File downloads (bandwidth-limited, counted in stats)
 	mux.Handle("/download/", bw.Wrap(http.StripPrefix("/download", handlers.FileHandler(roots))))
+
+	// Inline file serving for previews (bandwidth-limited, not counted in stats)
+	mux.Handle("/view/", bw.Wrap(http.StripPrefix("/view", handlers.ViewHandler(roots))))
 
 	// Chroma syntax-highlighting stylesheet (generated once at startup)
 	mux.HandleFunc("/highlight.css", handlers.HighlightCSSHandler(theme))

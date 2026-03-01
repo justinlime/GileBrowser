@@ -218,7 +218,7 @@ html.dark {
   --shadow-md:  0 6px 8px -1px rgba(0, 0, 0, 0.25), 0 4px 12px -1px rgba(0, 0, 0, 0.18);
 }
 
-html, body {
+html {
   height: 100%;
 }
 
@@ -229,6 +229,9 @@ body {
   font-size: 18px;
   line-height: 1.6;
   transition: background 0.2s, color 0.2s;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 a {
@@ -905,6 +908,29 @@ a:hover {
   border-radius: var(--radius);
   background: #fff;
   display: block;
+}
+
+/* ---- Stats banner ---------------------------------------- */
+.stats-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.55rem 1.5rem;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+  margin-top: auto; /* pushes banner to bottom of the flex body on short pages */
+}
+
+.stats-sep {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border);
 }
 
 /* ---- Scrollbar ------------------------------------------- */

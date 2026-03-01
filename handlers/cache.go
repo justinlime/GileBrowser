@@ -12,7 +12,7 @@ import (
 // Under normal operation the watcher invalidates entries long before this
 // fires; it exists only as a safety net in case a kernel watch event is
 // ever missed (e.g. watch-limit exhaustion, network filesystem edge cases).
-const safetyTTL = 5 * time.Minute
+const safetyTTL = 20 * time.Minute
 
 // ---------------------------------------------------------------------------
 // Directory-size cache

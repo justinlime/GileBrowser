@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 
+	"gileserver/handlers"
 	"gileserver/models"
 )
 
@@ -18,8 +19,9 @@ type Templates struct {
 }
 
 var tmplFuncs = template.FuncMap{
-	"humanSize": humanSize,
-	"add":       func(a, b int) int { return a + b },
+	"humanSize":     humanSize,
+	"add":           func(a, b int) int { return a + b },
+	"downloadStats": handlers.GetStats,
 }
 
 // LoadTemplates parses all templates from the embedded FS.
@@ -100,9 +102,10 @@ func (t *Templates) ExecutePreview(w http.ResponseWriter, data *models.PreviewDa
 	return t.preview.ExecuteTemplate(w, "base", data)
 }
 
-// humanSize formats a byte count into a human-readable string.
+// humanSize formats a byte count into a human-readable string using SI
+// (decimal) units where 1 KB = 1000 B, 1 MB = 1000 KB, 1 GB = 1000 MB, etc.
 func humanSize(n int64) string {
-	const unit = 1024
+	const unit = 1000
 	if n < unit {
 		return fmt.Sprintf("%d B", n)
 	}

@@ -66,6 +66,7 @@ func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme strin
 			mime := mimeForFile(fsPath)
 			pd.MIMEType = mime
 			pd.DownloadURL = "/download" + urlPath
+			pd.ViewURL = "/view" + urlPath
 			img := isImage(mime)
 			txt := isText(mime)
 

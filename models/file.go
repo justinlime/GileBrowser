@@ -72,8 +72,11 @@ type PreviewData struct {
 	IsText   bool
 	IsBinary bool // not image, not text — generic info card
 
-	// DownloadURL is the download (or ZIP) href shown in the header.
+	// DownloadURL is the download (or ZIP) href for explicit user-initiated downloads.
 	DownloadURL string
+	// ViewURL is the inline-serving href used for image previews.
+	// It does not set Content-Disposition: attachment and is not counted in stats.
+	ViewURL string
 
 	// FileSize, MIMEType and ModTime are shown on the generic info card.
 	FileSize int64
