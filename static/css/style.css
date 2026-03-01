@@ -740,14 +740,9 @@ a:hover {
   border-radius: calc(var(--radius) / 2);
 }
 
-.text-preview {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: auto;
-}
-
 /* ---- Chroma syntax highlighting -------------------------- */
 .text-preview {
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: auto;
@@ -756,6 +751,7 @@ a:hover {
 
 .text-preview .chroma {
   margin: 0;
+  background: var(--surface);
   border-radius: var(--radius);
   overflow: auto;
   font-family: var(--font-mono);
