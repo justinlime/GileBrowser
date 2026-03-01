@@ -13,15 +13,13 @@ import (
 //
 //   - Content-Security-Policy: restricts resource loading to the server's own
 //     origin. 'unsafe-inline' is required for the syntax-highlight CSS that
-//     Chroma injects as inline style attributes, and for the theme-toggle
-//     script that reads/writes localStorage on first paint to avoid flash.
-//     The 'frame-src' directive is set to 'self' so the HTML-preview iframe
-//     (srcdoc) can render; external iframes are blocked.
-//     When previewImages is true, img-src is widened to include https: so that
-//     external images embedded in Markdown/Org documents (badges, screenshots,
-//     etc.) are allowed to load.  When false, only same-origin and data: URIs
-//     are permitted, which matches the policy that the sanitizer enforces in
-//     rendered document HTML.
+//     Chroma injects as inline style attributes. The 'frame-src' directive is
+//     set to 'self' so the HTML-preview iframe (srcdoc) can render; external
+//     iframes are blocked. When previewImages is true, img-src is widened to
+//     include https: so that external images embedded in Markdown/Org documents
+//     (badges, screenshots, etc.) are allowed to load.  When false, only
+//     same-origin and data: URIs are permitted, which matches the policy that
+//     the sanitizer enforces in rendered document HTML.
 //
 //   - X-Content-Type-Options: tells browsers not to MIME-sniff response bodies.
 //     Without this a browser might execute a file whose declared Content-Type

@@ -33,8 +33,7 @@ type DirListing struct {
 	TotalSize int64
 	// IsRoot is true when this listing represents the top-level server root.
 	IsRoot bool
-	// DefaultTheme is the server-configured starting theme ("dark" or "light").
-	// Clients may override this via localStorage.
+	// DefaultTheme is the server-configured theme ("dark" or "light").
 	DefaultTheme string
 }
 
@@ -63,8 +62,7 @@ type IndexEntry struct {
 type PreviewData struct {
 	Title        string
 	SiteName     string // branding name shown in the header and page title
-	// DefaultTheme is the server-configured starting theme ("dark" or "light").
-	// Clients may override this via localStorage.
+	// DefaultTheme is the server-configured theme ("dark" or "light").
 	DefaultTheme string
 	FilePath string // URL path of the file or directory
 	FileName string

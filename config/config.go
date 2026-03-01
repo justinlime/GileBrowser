@@ -69,11 +69,10 @@ func (d *dirList) Set(value string) error {
 func Load() (*Config, error) {
 	var dirs dirList
 	portFlag           := flag.Int("port", 0, "HTTP port to listen on (env: GILE_PORT, default: 7887)")
-	themeFlag          := flag.String("highlight-theme", "", "Chroma syntax-highlight theme (env: GILE_HIGHLIGHT_THEME, default: catppuccin-mocha)")
 	titleFlag          := flag.String("title", "", "Site branding title (env: GILE_TITLE, default: GileBrowser)")
 	faviconFlag        := flag.String("favicon", "", "Path to a custom favicon file (env: GILE_FAVICON)")
 	bandwidthFlag      := flag.String("bandwidth", "", "Total upload bandwidth cap, e.g. 10mbps, 500kbps, 1gbps (env: GILE_BANDWIDTH, default: unlimited)")
-	defaultThemeFlag   := flag.String("default-theme", "", "Default UI theme for new visitors: dark or light (env: GILE_DEFAULT_THEME, default: dark)")
+	defaultThemeFlag   := flag.String("theme", "", "UI theme: dark or light (env: GILE_DEFAULT_THEME, default: dark)")
 	statsDirFlag       := flag.String("stats-dir", "", "Directory in which gile.json is stored (env: GILE_STATS_DIR, default: current working directory)")
 	previewImagesFlag  := flag.String("preview-images", "", "Enable inline image previews: true or false (env: GILE_PREVIEW_IMAGES, default: true)")
 	previewTextFlag    := flag.String("preview-text", "", "Enable syntax-highlighted text previews: true or false (env: GILE_PREVIEW_TEXT, default: true)")
@@ -115,15 +114,7 @@ func Load() (*Config, error) {
 		dirs = append(dirs, arg)
 	}
 
-	// --- highlight-theme ---
-	theme := *themeFlag
-	if theme == "" {
-		if v := os.Getenv("GILE_HIGHLIGHT_THEME"); v != "" {
-			theme = v
-		} else {
-			theme = "catppuccin-mocha"
-		}
-	}
+
 
 	// --- title ---
 	title := *titleFlag
@@ -154,7 +145,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("at least one root directory must be specified via -dir flag, GILE_DIRS env var, or positional argument")
 	}
 
-	// --- default-theme ---
+	// --- theme ---
 	defaultTheme := *defaultThemeFlag
 	if defaultTheme == "" {
 		if v := os.Getenv("GILE_DEFAULT_THEME"); v != "" {
@@ -165,7 +156,13 @@ func Load() (*Config, error) {
 	}
 	defaultTheme = strings.ToLower(strings.TrimSpace(defaultTheme))
 	if defaultTheme != "dark" && defaultTheme != "light" {
-		return nil, fmt.Errorf("invalid --default-theme %q: must be \"dark\" or \"light\"", defaultTheme)
+		return nil, fmt.Errorf("invalid --theme %q: must be \"dark\" or \"light\"", defaultTheme)
+	}
+
+	// --- highlight-theme (derived from theme) ---
+	theme := "catppuccin-mocha"
+	if defaultTheme == "light" {
+		theme = "catppuccin-latte"
 	}
 
 	// Validate that all supplied directories exist

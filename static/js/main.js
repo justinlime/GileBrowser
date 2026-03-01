@@ -185,42 +185,6 @@
   loadIndex();
 
   // ------------------------------------------------------------------ //
-  // Theme toggle (Catppuccin Mocha dark / Latte light)                  //
-  // ------------------------------------------------------------------ //
-
-  (function () {
-    var html = document.documentElement;
-    var btn  = document.getElementById("theme-toggle");
-    var icon = document.getElementById("theme-icon");
-
-    // Server-configured default, injected via data-default-theme on <html>.
-    var serverDefault = html.getAttribute("data-default-theme") || "dark";
-
-    // Priority: 1) client localStorage pref  2) server default
-    var saved = localStorage.getItem("gile-theme");
-    var current = saved || serverDefault;
-
-    function applyTheme(theme) {
-      current = theme;
-      html.classList.remove("dark", "light");
-      html.classList.add(theme);
-      if (icon) {
-        icon.textContent = theme === "dark" ? "☀" : "☽";
-      }
-      localStorage.setItem("gile-theme", theme);
-    }
-
-    // Apply immediately to avoid flash
-    applyTheme(current);
-
-    if (btn) {
-      btn.addEventListener("click", function () {
-        applyTheme(current === "dark" ? "light" : "dark");
-      });
-    }
-  })();
-
-  // ------------------------------------------------------------------ //
   // Global keyboard shortcut: press "/" to focus search                 //
   // ------------------------------------------------------------------ //
 

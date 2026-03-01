@@ -33,10 +33,10 @@ Multiple directories:
 gilebrowser --dir /srv/media --dir /srv/docs
 ```
 
-Custom port and theme:
+Custom port:
 
 ```sh
-gilebrowser --port 8080 --highlight-theme catppuccin-latte --dir /srv/files
+gilebrowser --port 8080 --dir /srv/files
 ```
 
 ---
@@ -51,8 +51,7 @@ Flags take precedence over environment variables. All preview flags default to `
 | `--dir` | `GILE_DIRS` | — | Root directory to serve (repeatable; env is colon-separated) |
 | `--bandwidth` | `GILE_BANDWIDTH` | unlimited | Server-wide upload cap, e.g. `10mbps`, `500kbps`, `1gbps` |
 | `--title` | `GILE_TITLE` | `GileBrowser` | Site name shown in the header and page titles |
-| `--default-theme` | `GILE_DEFAULT_THEME` | `dark` | Default UI colour scheme: `dark` or `light`. Overridable per-client via the in-page toggle. |
-| `--highlight-theme` | `GILE_HIGHLIGHT_THEME` | `catppuccin-mocha` | Chroma syntax-highlight theme |
+| `--theme` | `GILE_DEFAULT_THEME` | `dark` | UI theme: `dark` or `light`. |
 | `--favicon` | `GILE_FAVICON` | — | Path to a custom favicon (PNG, SVG, ICO, etc.) |
 | `--stats-dir` | `GILE_STATS_DIR` | current working directory | Directory where `gile.json` is written. Created on startup if absent. |
 | `--preview-images` | `GILE_PREVIEW_IMAGES` | `true` | Render image files inline |
@@ -78,42 +77,6 @@ Boolean options accept: `true`, `false`, `1`, `0`, `yes`, `no`, `on`, `off` (cas
 | `false` | `true` | `true` | Info card | Highlighted | Rendered |
 | `false` | `true` | `false` | Info card | Highlighted | Highlighted |
 | `false` | `false` | `false` | Info card | Info card | Info card |
-
-</details>
-
-<details>
-<summary>Available highlight themes</summary>
-
-| Theme | Style |
-|-------|-------|
-| `catppuccin-mocha` | Dark — muted blue (default) |
-| `catppuccin-macchiato` | Dark — slightly warmer |
-| `catppuccin-frappe` | Medium dark |
-| `catppuccin-latte` | Light |
-| `dracula` | Dark purple |
-| `monokai` | Classic dark |
-| `github` | Light |
-| `github-dark` | Dark |
-| `nord` | Arctic dark |
-| `nordic` | Nord variant |
-| `onedark` | One Dark |
-| `tokyonight-night` | Tokyo Night |
-| `tokyonight-storm` | Tokyo Night Storm |
-| `tokyonight-moon` | Tokyo Night Moon |
-| `tokyonight-day` | Light |
-| `gruvbox` | Dark warm |
-| `gruvbox-light` | Light warm |
-| `rose-pine` | Dark |
-| `rose-pine-moon` | Dark variant |
-| `rose-pine-dawn` | Light |
-| `solarized-dark` | Solarized Dark |
-| `solarized-light` | Solarized Light |
-| `vim` | Vim default |
-| `emacs` | Emacs default |
-| `xcode` | Light |
-| `xcode-dark` | Dark |
-
-Any name from Chroma's full style registry is accepted.
 
 </details>
 
@@ -248,7 +211,6 @@ docker run -d \
   -e GILE_PORT=7887 \
   -e GILE_TITLE=MyFiles \
   -e GILE_DEFAULT_THEME=dark \
-  -e GILE_HIGHLIGHT_THEME=catppuccin-mocha \
   -e GILE_BANDWIDTH=100mbps \
   -e GILE_STATS_DIR=/data/stats \
   -e GILE_PREVIEW_IMAGES=true \
@@ -279,7 +241,6 @@ services:
       GILE_PORT: 7887
       GILE_TITLE: MyFiles
       GILE_DEFAULT_THEME: dark
-      GILE_HIGHLIGHT_THEME: catppuccin-mocha
       GILE_BANDWIDTH: 100mbps
       GILE_STATS_DIR: /data/stats
       GILE_PREVIEW_IMAGES: "true"

@@ -272,32 +272,6 @@ a:hover {
   letter-spacing: 0.75px;
 }
 
-/* ---- Theme toggle ---------------------------------------- */
-.theme-toggle {
-  flex-shrink: 0;
-  margin-left: auto;
-  background: transparent;
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0.6rem 1rem;
-  font-size: 1.1rem;
-  font-family: var(--font-sans);
-  transition: border-color 0.15s, color 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 48px;
-  height: 40px;
-  gap: 0.35rem;
-}
-.theme-toggle:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--surface2);
-}
-
 /* ---- Search ---------------------------------------------- */
 .search-wrap {
   position: relative;
@@ -1014,7 +988,7 @@ a:hover {
     padding: 1rem 0.75rem;
   }
 
-  /* header — site-title left, theme-toggle right, search full-width below */
+  /* header — site-title left, search full-width below */
   .site-header {
     flex-wrap: wrap;
     gap: 0.6rem;
@@ -1025,17 +999,8 @@ a:hover {
     order: 0;
     flex-shrink: 0;
   }
-  .theme-toggle {
-    order: 1;
-    margin-left: auto;
-    padding: 0.4rem 0.7rem;
-    font-size: 0.95rem;
-    min-width: 40px;
-    height: 36px;
-    flex-shrink: 0;
-  }
   .search-wrap {
-    order: 2;
+    order: 1;
     width: 100%;
     max-width: 100%;
     flex-basis: 100%;

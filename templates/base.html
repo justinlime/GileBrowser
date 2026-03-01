@@ -1,6 +1,6 @@
 {{/* base.html – defines the "base" block layout */}}
 {{define "base"}}<!DOCTYPE html>
-<html lang="en" data-default-theme="{{.DefaultTheme}}">
+<html lang="en" class="{{.DefaultTheme}}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,9 +16,6 @@
       <input type="text" id="search-input" placeholder="Search files..." autocomplete="off" />
       <div id="search-results" class="search-results hidden"></div>
     </div>
-    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark mode">
-      <span id="theme-icon">☀</span>
-    </button>
   </header>
   <main class="container">
     {{block "content" .}}{{end}}
