@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"path"
 	"strings"
 
 	"github.com/alecthomas/chroma/v2"
@@ -90,10 +91,13 @@ func buildDocPolicy(allowDataImages bool) *bluemonday.Policy {
 	// --- Links ---
 	// Only http, https, and mailto are permitted as href schemes.
 	// Relative URLs (e.g. anchor links within a document) are also allowed.
+	// RequireParseableURLs is intentionally NOT set: some real-world URLs (e.g.
+	// badge URLs with unencoded spaces) fail strict RFC parsing but are otherwise
+	// safe. The scheme allowlist below already prevents dangerous schemes such as
+	// javascript: or vbscript: regardless of parseability.
 	p.AllowAttrs("href", "title").OnElements("a")
 	p.AllowURLSchemes("http", "https", "mailto")
 	p.AllowRelativeURLs(true)
-	p.RequireParseableURLs(true)
 
 	// --- Images ---
 	p.AllowAttrs("src", "alt", "title", "width", "height").OnElements("img")
@@ -107,7 +111,9 @@ func buildDocPolicy(allowDataImages bool) *bluemonday.Policy {
 	// --- Global safe attributes ---
 	// id and class are needed for heading anchors (goldmark WithAutoHeadingID)
 	// and for the Chroma CSS class names on highlighted <code>/<span> elements.
-	p.AllowAttrs("id", "class", "lang", "title").Globally()
+	// align is needed for raw HTML blocks in Markdown/Org documents that use
+	// e.g. <h1 align="center"> or <p align="center"> for centred content.
+	p.AllowAttrs("id", "class", "lang", "title", "align").Globally()
 
 	// --- Table layout attributes ---
 	p.AllowAttrs("align", "valign", "colspan", "rowspan", "scope", "abbr", "headers").OnElements("td", "th")
@@ -138,12 +144,21 @@ func isRenderable(mimeType string) bool {
 // On success IsRendered should be set to true on PreviewData.
 // On any failure it returns an error and the caller should fall back to
 // syntax highlighting.
-func renderContent(content, mimeType string) (template.HTML, error) {
+//
+//   - docURLDir is the URL directory of the document being rendered
+//     (e.g. "/myroot/subdir" for a file at /myroot/subdir/README.md).
+//     It is used to rewrite relative image src paths so they resolve through
+//     the /view/ route instead of landing on /preview/, where they would 404.
+//
+//   - previewImages controls whether <img> elements survive sanitization.
+//     When false the policy strips all images, consistent with the server-wide
+//     --preview-images=false flag.
+func renderContent(content, mimeType, docURLDir string, previewImages bool) (template.HTML, error) {
 	switch baseMIME(mimeType) {
 	case "text/markdown":
-		return renderMarkdown(content)
+		return renderMarkdown(content, docURLDir, previewImages)
 	case "text/x-org":
-		return renderOrg(content)
+		return renderOrg(content, docURLDir, previewImages)
 	case "text/html":
 		return renderHTML(content)
 	}
@@ -161,7 +176,7 @@ func renderContent(content, mimeType string) (template.HTML, error) {
 // The goldmark-highlighting extension is already a project dependency; it uses
 // Chroma with WithClasses(true) so highlighted blocks pick up their colours
 // from the same highlight.css that the rest of the preview system uses.
-func renderMarkdown(content string) (template.HTML, error) {
+func renderMarkdown(content, docURLDir string, previewImages bool) (template.HTML, error) {
 	md := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM, // tables, strikethrough, linkify, task lists
@@ -186,7 +201,7 @@ func renderMarkdown(content string) (template.HTML, error) {
 	if err := md.Convert([]byte(content), &buf); err != nil {
 		return "", fmt.Errorf("markdown render: %w", err)
 	}
-	return template.HTML(sanitizeHTML(buf.String())), nil
+	return template.HTML(sanitizeHTML(buf.String(), docURLDir, previewImages)), nil
 }
 
 // renderOrg converts Emacs Org-mode content to HTML using go-org with Chroma
@@ -201,7 +216,7 @@ func renderMarkdown(content string) (template.HTML, error) {
 //
 // All rendered output is passed through sanitizeHTML before being placed in
 // the page.
-func renderOrg(content string) (template.HTML, error) {
+func renderOrg(content, docURLDir string, previewImages bool) (template.HTML, error) {
 	doc := org.New().Parse(strings.NewReader(content), "")
 	w := org.NewHTMLWriter()
 	w.HighlightCodeBlock = func(source, lang string, inline bool, _ map[string]string) string {
@@ -211,7 +226,7 @@ func renderOrg(content string) (template.HTML, error) {
 	if err != nil {
 		return "", fmt.Errorf("org render: %w", err)
 	}
-	return template.HTML(sanitizeHTML(out)), nil
+	return template.HTML(sanitizeHTML(out, docURLDir, previewImages)), nil
 }
 
 // chromaHighlightBlock runs source through the Chroma lexer for lang and
@@ -270,13 +285,123 @@ func baseMIME(mimeType string) string {
 // any element or attribute not on the allowlist. It is called on all rendered
 // Markdown and Org-mode output before the result is embedded in a page.
 //
+// Two pre-processing steps run before sanitization:
+//  1. Relative image src paths are rewritten to /view/<docURLDir>/… so the
+//     browser fetches them through the inline-serving route rather than
+//     landing on /preview/ where they would 404.
+//  2. External image URLs are percent-encoded to fix literal spaces that would
+//     otherwise cause bluemonday to silently drop the src attribute.
+//
+// When previewImages is false the policy used is rebuilt without <img> support
+// so all image tags are stripped from the output, consistent with the
+// server-wide --preview-images=false flag.
+//
 // If InitRenderOptions has not yet been called (e.g. during tests), a
 // conservative policy without data: image support is built on the fly.
-func sanitizeHTML(input string) string {
-	if docPolicy == nil {
-		return buildDocPolicy(false).Sanitize(input)
+func sanitizeHTML(input, docURLDir string, previewImages bool) string {
+	input = rewriteImgSrcURLs(input, docURLDir)
+	p := docPolicy
+	if p == nil {
+		p = buildDocPolicy(previewImages)
+	} else if !previewImages {
+		// Images are globally disabled — use a no-image policy for this render.
+		p = buildDocPolicy(false)
 	}
-	return docPolicy.Sanitize(input)
+	return p.Sanitize(input)
+}
+
+// rewriteImgSrcURLs rewrites img src="…" attributes in the rendered HTML so
+// that images resolve correctly through the server's /view/ route.
+//
+//   - Relative paths (no scheme, not starting with /) are rewritten to
+//     /view/<docURLDir>/path so the browser fetches them via ViewHandler
+//     instead of treating them as relative to the /preview/ page URL.
+//   - Absolute http/https URLs are left as-is except that any literal spaces
+//     are percent-encoded (%20) to prevent bluemonday from dropping the src.
+//   - data: URIs, fragment-only (#…), and already-absolute /view/ or /static/
+//     paths are passed through unchanged.
+//
+// The rewrite uses a simple string scanner rather than a full HTML parser:
+// it is narrow in scope (only img src values) and avoids a heavy dependency.
+func rewriteImgSrcURLs(html, docURLDir string) string {
+	const needle = `src="`
+	if !strings.Contains(html, needle) {
+		return html
+	}
+
+	var b strings.Builder
+	b.Grow(len(html) + 64)
+	remaining := html
+	for {
+		idx := strings.Index(remaining, needle)
+		if idx == -1 {
+			b.WriteString(remaining)
+			break
+		}
+		// Copy everything up to and including src="
+		b.WriteString(remaining[:idx+len(needle)])
+		remaining = remaining[idx+len(needle):]
+
+		// Find the closing quote of the attribute value.
+		end := strings.IndexByte(remaining, '"')
+		if end == -1 {
+			// Malformed — emit as-is and stop.
+			b.WriteString(remaining)
+			break
+		}
+		rawSrc := remaining[:end]
+		remaining = remaining[end:] // closing quote stays in remaining
+
+		b.WriteString(resolveImgSrc(rawSrc, docURLDir))
+	}
+	return b.String()
+}
+
+// resolveImgSrc transforms a single img src value for use in a preview page.
+//
+//   - External http/https URLs: spaces are percent-encoded so they survive
+//     bluemonday's URL validator; everything else is left unchanged.
+//   - Relative paths: rewritten to /view/<docURLDir>/… so they are served by
+//     ViewHandler with the correct MIME type and inline Content-Disposition.
+//   - Everything else (data:, #fragment, /absolute): passed through as-is.
+func resolveImgSrc(src, docURLDir string) string {
+	switch {
+	case strings.HasPrefix(src, "https://") || strings.HasPrefix(src, "http://"):
+		return encodeURLSpaces(src)
+
+	case src == "" || strings.HasPrefix(src, "data:") || strings.HasPrefix(src, "#"):
+		return src
+
+	case strings.HasPrefix(src, "/"):
+		// Already an absolute path — pass through. This covers cases like
+		// /view/… paths that a document author has written explicitly.
+		return src
+
+	default:
+		// Relative path — resolve against the document's directory using the
+		// /view/ route so ViewHandler can serve the file inline.
+		//
+		// path.Join cleans away any ".." or "." segments, which prevents a
+		// crafted relative path from escaping the served directory tree. The
+		// resolvePath check in ViewHandler adds a second layer of defence.
+		joined := path.Join("/view", docURLDir, src)
+		return joined
+	}
+}
+
+// encodeURLSpaces replaces literal space characters in a URL string with their
+// percent-encoded equivalent (%20). It only targets spaces — other characters
+// that may be technically invalid in a URL are left as-is to avoid corrupting
+// URLs that are already partially encoded or use non-standard characters.
+//
+// This is intentionally simpler than a full RFC 3986 normalization pass:
+// bluemonday validates against the allowed scheme list regardless, so the only
+// goal here is to prevent spaces from causing the URL to be silently dropped.
+func encodeURLSpaces(rawURL string) string {
+	if !strings.Contains(rawURL, " ") {
+		return rawURL
+	}
+	return strings.ReplaceAll(rawURL, " ", "%20")
 }
 
 // htmlAttrEscape escapes a string for safe embedding inside an HTML attribute

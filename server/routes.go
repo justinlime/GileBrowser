@@ -17,6 +17,11 @@ import (
 //     script that reads/writes localStorage on first paint to avoid flash.
 //     The 'frame-src' directive is set to 'self' so the HTML-preview iframe
 //     (srcdoc) can render; external iframes are blocked.
+//     When previewImages is true, img-src is widened to include https: so that
+//     external images embedded in Markdown/Org documents (badges, screenshots,
+//     etc.) are allowed to load.  When false, only same-origin and data: URIs
+//     are permitted, which matches the policy that the sanitizer enforces in
+//     rendered document HTML.
 //
 //   - X-Content-Type-Options: tells browsers not to MIME-sniff response bodies.
 //     Without this a browser might execute a file whose declared Content-Type
@@ -29,16 +34,21 @@ import (
 //   - Referrer-Policy: suppresses the Referer header on outbound navigations
 //     so internal file paths are not leaked to external sites linked from
 //     previewed documents.
-func securityHeaders(h http.Handler) http.Handler {
+func securityHeaders(h http.Handler, previewImages bool) http.Handler {
+	imgSrc := "img-src 'self' data:;"
+	if previewImages {
+		imgSrc = "img-src 'self' data: https:;"
+	}
+	csp := "default-src 'self'; " +
+		"script-src 'self' 'unsafe-inline'; " +
+		"style-src 'self' 'unsafe-inline'; " +
+		imgSrc + " " +
+		"font-src 'self'; " +
+		"frame-src 'self'; " +
+		"object-src 'none';"
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline'; "+
-				"style-src 'self' 'unsafe-inline'; "+
-				"img-src 'self' data:; "+
-				"font-src 'self'; "+
-				"frame-src 'self'; "+
-				"object-src 'none';")
+		w.Header().Set("Content-Security-Policy", csp)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Referrer-Policy", "same-origin")

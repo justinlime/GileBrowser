@@ -53,7 +53,7 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 
 	mux := http.NewServeMux()
 	registerRoutes(mux, roots, cfg.Theme, cfg.Title, cfg.FaviconPath, cfg.DefaultTheme, bwManager, previewOpts, tmpl)
-	wrappedMux := securityHeaders(mux)
+	wrappedMux := securityHeaders(mux, cfg.PreviewImages)
 
 	// Load persisted download statistics before any handler runs.
 	handlers.InitStats(cfg.StatsDir)

@@ -93,7 +93,8 @@ func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme strin
 				pd.HighlightedContent = highlighted
 				// Attempt a rich render only when document previews are also enabled.
 				if opts.Docs && isRenderable(mime) {
-					if rendered, err := renderContent(content, mime); err == nil {
+					docURLDir := path.Dir(urlPath)
+					if rendered, err := renderContent(content, mime, docURLDir, opts.Images); err == nil {
 						pd.RenderedContent = rendered
 						pd.IsRendered = true
 					}
