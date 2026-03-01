@@ -135,6 +135,14 @@
     searchResults.classList.add("hidden");
   }
 
+  function humanSize(bytes) {
+    if (bytes === 0) return "0 B";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+  }
+
   function renderResults(items) {
     searchResults.innerHTML = "";
 
@@ -152,15 +160,28 @@
       a.href = "/preview" + item.path;
       a.className = "search-result-item";
 
+      // Top row: filename + size chip
+      const top = document.createElement("span");
+      top.className = "result-top";
+
       const name = document.createElement("span");
       name.className = "result-name";
       name.textContent = item.name;
+      top.appendChild(name);
 
+      if (item.size != null && item.size >= 0) {
+        const size = document.createElement("span");
+        size.className = "result-size";
+        size.textContent = "(" + humanSize(item.size) + ")";
+        top.appendChild(size);
+      }
+
+      // Bottom row: path
       const path = document.createElement("span");
       path.className = "result-path";
       path.textContent = item.path;
 
-      a.appendChild(name);
+      a.appendChild(top);
       a.appendChild(path);
       searchResults.appendChild(a);
     });
@@ -205,7 +226,7 @@
     fileIndex.forEach(function (entry) {
       var score = multiTokenScore(query, entry);
       if (score >= 0) {
-        scored.push({ score: score, name: entry.name, path: entry.path });
+        scored.push({ score: score, name: entry.name, path: entry.path, size: entry.size });
       }
     });
 

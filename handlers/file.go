@@ -150,9 +150,14 @@ func walkDir(rootName, fsRoot, dir string, idx *models.FileIndex) {
 			continue
 		}
 		urlPath := "/" + rootName + "/" + filepath.ToSlash(rel)
+		var size int64
+		if fi, err := e.Info(); err == nil {
+			size = fi.Size()
+		}
 		idx.Files = append(idx.Files, models.IndexEntry{
 			Name: e.Name(),
 			Path: urlPath,
+			Size: size,
 		})
 	}
 }

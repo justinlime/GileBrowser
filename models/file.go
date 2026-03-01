@@ -55,6 +55,7 @@ type FileIndex struct {
 type IndexEntry struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
+	Size int64  `json:"size"`
 }
 
 // PreviewData holds the information needed to render a file preview page.
