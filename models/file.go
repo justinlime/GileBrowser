@@ -51,10 +51,10 @@ type FileIndex struct {
 }
 
 // IndexEntry is a single entry in the search index.
+// Only files are indexed; directories are excluded to minimise index size.
 type IndexEntry struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
-	Dir  bool   `json:"dir"`
 }
 
 // PreviewData holds the information needed to render a file preview page.

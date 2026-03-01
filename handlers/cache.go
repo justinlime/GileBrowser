@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"log"
 	"os"
@@ -180,39 +182,55 @@ func evictSizePath(fsPath string) {
 // Search-index cache
 // ---------------------------------------------------------------------------
 
-// indexCache holds the search index pre-serialised as JSON bytes.
-// Storing []byte instead of *models.FileIndex means:
-//   - The []IndexEntry slice (the bulk of the memory) is released immediately
-//     after serialisation and can be GC'd.
-//   - Every HTTP response writes the same bytes directly with no per-request
-//     re-serialisation or intermediate bytes.Buffer allocation.
+// indexCache holds the search index pre-serialised as gzip-compressed JSON bytes.
+//
+// Two-stage compression strategy:
+//  1. buildIndex → *models.FileIndex  ([]IndexEntry, short-lived)
+//  2. serializeIndex → gzip(JSON)     (compact []byte, long-lived in cache)
+//
+// The []IndexEntry slice is released immediately after step 2, so peak RAM
+// during a rebuild is: slice + raw JSON (momentary) + gzip output (retained).
+// The retained blob is typically 5-10x smaller than the raw JSON it replaces,
+// directly reducing the steady-state memory footprint of the cache.
 var indexCache struct {
 	mu         sync.Mutex
-	json       []byte // pre-serialised JSON; nil until first build
+	gzJSON     []byte // gzip-compressed JSON; nil until first build
 	expires    time.Time
 	refreshing bool
 }
 
-// serializeIndex JSON-encodes a FileIndex and returns the raw bytes.
-// The FileIndex itself is not retained after this call.
+// serializeIndex JSON-encodes a FileIndex, gzip-compresses the result, and
+// returns the compressed bytes. The FileIndex itself is not retained after
+// this call. Using BestSpeed keeps the compression fast at build time while
+// still yielding significant size reduction for repetitive JSON text.
 func serializeIndex(idx *models.FileIndex) []byte {
-	b, err := json.Marshal(idx)
+	raw, err := json.Marshal(idx)
 	if err != nil {
-		// Fallback to an empty index rather than serving nothing.
-		return []byte(`{"files":[]}`)
+		// Fallback: gzip an empty index.
+		raw = []byte(`{"files":[]}`)
 	}
-	return b
+
+	var buf bytes.Buffer
+	gz, err := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	if err != nil {
+		// Should never happen with a valid level, but return raw JSON as a
+		// last resort so the cache is never left nil.
+		return raw
+	}
+	gz.Write(raw)
+	gz.Close()
+	return buf.Bytes()
 }
 
-// cachedIndexJSON returns the pre-serialised JSON for the search index,
-// rebuilding it in the background when stale.
+// cachedIndexGzip returns the pre-serialised, gzip-compressed JSON for the
+// search index, rebuilding it in the background when stale.
 //
 //   - First request: builds synchronously (guaranteed non-nil return).
 //   - Subsequent stale hits: returns the old bytes immediately and triggers a
 //     single background goroutine to refresh; callers never block on a walk.
-func cachedIndexJSON(roots map[string]string) []byte {
+func cachedIndexGzip(roots map[string]string) []byte {
 	indexCache.mu.Lock()
-	data := indexCache.json
+	data := indexCache.gzJSON
 	expired := time.Now().After(indexCache.expires)
 	refreshing := indexCache.refreshing
 	indexCache.mu.Unlock()
@@ -221,7 +239,7 @@ func cachedIndexJSON(roots map[string]string) []byte {
 		// First request ever: build synchronously so we never return nil.
 		fresh := serializeIndex(buildIndex(roots))
 		indexCache.mu.Lock()
-		indexCache.json = fresh
+		indexCache.gzJSON = fresh
 		indexCache.expires = time.Now().Add(safetyTTL)
 		indexCache.mu.Unlock()
 		return fresh
@@ -244,7 +262,7 @@ func cachedIndexJSON(roots map[string]string) []byte {
 
 			fresh := serializeIndex(buildIndex(roots))
 			indexCache.mu.Lock()
-			indexCache.json = fresh
+			indexCache.gzJSON = fresh
 			indexCache.expires = time.Now().Add(safetyTTL)
 			indexCache.mu.Unlock()
 		}()
@@ -291,10 +309,10 @@ func WarmCache(roots map[string]string) {
 		log.Println("cache: warming started")
 
 		// Build the search index — the single most expensive walk.
-		// Serialise immediately so the []IndexEntry slice can be GC'd.
+		// Serialise and compress immediately so the []IndexEntry slice can be GC'd.
 		fresh := serializeIndex(buildIndex(roots))
 		indexCache.mu.Lock()
-		indexCache.json = fresh
+		indexCache.gzJSON = fresh
 		indexCache.expires = time.Now().Add(safetyTTL)
 		indexCache.mu.Unlock()
 

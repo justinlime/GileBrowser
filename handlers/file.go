@@ -109,8 +109,10 @@ func formatSize(b int64) string {
 // intermediate buffer allocation is needed.
 func IndexHandler(roots map[string]string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := cachedIndexJSON(roots)
+		data := cachedIndexGzip(roots)
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 		w.Write(data)
 	}
 }
@@ -135,6 +137,14 @@ func walkDir(rootName, fsRoot, dir string, idx *models.FileIndex) {
 		fullPath := filepath.Join(dir, e.Name())
 		isDir := entryIsDir(dir, e)
 
+		if isDir {
+			// Recurse into subdirectories but do not add them to the index.
+			// Excluding directories shrinks the index and avoids the client
+			// having to filter them out on every search keystroke.
+			walkDir(rootName, fsRoot, fullPath, idx)
+			continue
+		}
+
 		rel, err := filepath.Rel(fsRoot, fullPath)
 		if err != nil {
 			continue
@@ -143,10 +153,6 @@ func walkDir(rootName, fsRoot, dir string, idx *models.FileIndex) {
 		idx.Files = append(idx.Files, models.IndexEntry{
 			Name: e.Name(),
 			Path: urlPath,
-			Dir:  isDir,
 		})
-		if isDir {
-			walkDir(rootName, fsRoot, fullPath, idx)
-		}
 	}
 }

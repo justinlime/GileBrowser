@@ -118,7 +118,6 @@
 
     const scored = [];
     fileIndex.forEach(function (entry) {
-      if (entry.dir) return; // skip directories, files only
       const score = fuzzyScore(query, entry.name);
       if (score >= 0) {
         scored.push({ score: score, name: entry.name, path: entry.path });
