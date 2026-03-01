@@ -33,6 +33,16 @@ type Config struct {
 	// StatsFile is the path to the JSON file used to persist download
 	// statistics across restarts.
 	StatsFile string
+	// PreviewImages controls whether image files are rendered inline.
+	// When false, image files fall back to the binary info-card.
+	PreviewImages bool
+	// PreviewText controls whether text/code files are rendered with syntax
+	// highlighting. When false, text files fall back to the binary info-card.
+	PreviewText bool
+	// PreviewDocs controls whether Markdown, Org-mode, and HTML files are
+	// rendered as rich documents. When false they fall back to syntax
+	// highlighting (if PreviewText is enabled) or the binary info-card.
+	PreviewDocs bool
 }
 
 // dirList is a custom flag.Value that can be set multiple times.
@@ -50,13 +60,16 @@ func (d *dirList) Set(value string) error {
 // Load parses flags and environment variables, returning a validated Config.
 func Load() (*Config, error) {
 	var dirs dirList
-	portFlag         := flag.Int("port", 0, "HTTP port to listen on (env: GILE_PORT, default: 7887)")
-	themeFlag        := flag.String("highlight-theme", "", "Chroma syntax-highlight theme (env: GILE_HIGHLIGHT_THEME, default: catppuccin-mocha)")
-	titleFlag        := flag.String("title", "", "Site branding title (env: GILE_TITLE, default: GileBrowser)")
-	faviconFlag      := flag.String("favicon", "", "Path to a custom favicon file (env: GILE_FAVICON)")
-	bandwidthFlag    := flag.String("bandwidth", "", "Total upload bandwidth cap, e.g. 10mbps, 500kbps, 1gbps (env: GILE_BANDWIDTH, default: unlimited)")
-	defaultThemeFlag := flag.String("default-theme", "", "Default UI theme for new visitors: dark or light (env: GILE_DEFAULT_THEME, default: dark)")
-	statsFileFlag    := flag.String("stats-file", "", "Path to the download-statistics JSON file (env: GILE_STATS_FILE, default: gilebrowser-stats.json)")
+	portFlag           := flag.Int("port", 0, "HTTP port to listen on (env: GILE_PORT, default: 7887)")
+	themeFlag          := flag.String("highlight-theme", "", "Chroma syntax-highlight theme (env: GILE_HIGHLIGHT_THEME, default: catppuccin-mocha)")
+	titleFlag          := flag.String("title", "", "Site branding title (env: GILE_TITLE, default: GileBrowser)")
+	faviconFlag        := flag.String("favicon", "", "Path to a custom favicon file (env: GILE_FAVICON)")
+	bandwidthFlag      := flag.String("bandwidth", "", "Total upload bandwidth cap, e.g. 10mbps, 500kbps, 1gbps (env: GILE_BANDWIDTH, default: unlimited)")
+	defaultThemeFlag   := flag.String("default-theme", "", "Default UI theme for new visitors: dark or light (env: GILE_DEFAULT_THEME, default: dark)")
+	statsFileFlag      := flag.String("stats-file", "", "Path to the download-statistics JSON file (env: GILE_STATS_FILE, default: gilebrowser-stats.json)")
+	previewImagesFlag  := flag.String("preview-images", "", "Enable inline image previews: true or false (env: GILE_PREVIEW_IMAGES, default: true)")
+	previewTextFlag    := flag.String("preview-text", "", "Enable syntax-highlighted text previews: true or false (env: GILE_PREVIEW_TEXT, default: true)")
+	previewDocsFlag    := flag.String("preview-docs", "", "Enable rendered document previews (Markdown, Org, HTML): true or false (env: GILE_PREVIEW_DOCS, default: true)")
 	flag.Var(&dirs, "dir", "Root directory to serve (repeatable; env: GILE_DIRS, colon-separated)")
 	flag.Parse()
 
@@ -181,6 +194,15 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// --- preview-images ---
+	previewImages := parseBoolFlag(*previewImagesFlag, "GILE_PREVIEW_IMAGES", true)
+
+	// --- preview-text ---
+	previewText := parseBoolFlag(*previewTextFlag, "GILE_PREVIEW_TEXT", true)
+
+	// --- preview-docs ---
+	previewDocs := parseBoolFlag(*previewDocsFlag, "GILE_PREVIEW_DOCS", true)
+
 	return &Config{
 		Port:           port,
 		Dirs:           []string(dirs),
@@ -190,7 +212,40 @@ func Load() (*Config, error) {
 		BandwidthLimit: bandwidthBps,
 		DefaultTheme:   defaultTheme,
 		StatsFile:      statsFile,
+		PreviewImages:  previewImages,
+		PreviewText:    previewText,
+		PreviewDocs:    previewDocs,
 	}, nil
+}
+
+// parseBoolFlag resolves a boolean option from a CLI string flag value, with
+// fallback to an environment variable and then a compile-time default.
+// Accepted truthy strings: "1", "t", "true", "yes", "on".
+// Accepted falsy strings:  "0", "f", "false", "no", "off".
+// An empty string means "not set"; the next source in the chain is tried.
+func parseBoolFlag(flagVal, envKey string, defaultVal bool) bool {
+	if flagVal != "" {
+		if b, ok := parseBoolString(flagVal); ok {
+			return b
+		}
+	}
+	if v := os.Getenv(envKey); v != "" {
+		if b, ok := parseBoolString(v); ok {
+			return b
+		}
+	}
+	return defaultVal
+}
+
+// parseBoolString converts a human-readable boolean string to a bool.
+func parseBoolString(s string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "1", "t", "true", "yes", "on":
+		return true, true
+	case "0", "f", "false", "no", "off":
+		return false, true
+	}
+	return false, false
 }
 
 // parseBandwidth converts a human-readable bandwidth string to bytes per

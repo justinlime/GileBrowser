@@ -9,7 +9,7 @@ import (
 )
 
 // registerRoutes attaches all handlers to the given mux.
-func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, faviconPath, defaultTheme string, bw *handlers.BandwidthManager, tmpl *Templates) {
+func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, faviconPath, defaultTheme string, bw *handlers.BandwidthManager, previewOpts handlers.PreviewOptions, tmpl *Templates) {
 	// Static assets
 	mux.Handle("/static/", http.StripPrefix("/static/", staticHandler()))
 
@@ -36,7 +36,7 @@ func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, f
 	mux.HandleFunc("/highlight.css", handlers.HighlightCSSHandler(theme))
 
 	// File previews
-	mux.HandleFunc("/preview/", handlers.PreviewHandler(roots, theme, title, defaultTheme, tmpl))
+	mux.HandleFunc("/preview/", handlers.PreviewHandler(roots, theme, title, defaultTheme, previewOpts, tmpl))
 
 	// Directory / root listing (catch-all)
 	mux.HandleFunc("/", routeRoot(roots, title, defaultTheme, tmpl))

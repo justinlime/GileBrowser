@@ -44,8 +44,14 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 
 	bwManager := handlers.NewBandwidthManager(cfg.BandwidthLimit)
 
+	previewOpts := handlers.PreviewOptions{
+		Images: cfg.PreviewImages,
+		Text:   cfg.PreviewText,
+		Docs:   cfg.PreviewDocs,
+	}
+
 	mux := http.NewServeMux()
-	registerRoutes(mux, roots, cfg.Theme, cfg.Title, cfg.FaviconPath, cfg.DefaultTheme, bwManager, tmpl)
+	registerRoutes(mux, roots, cfg.Theme, cfg.Title, cfg.FaviconPath, cfg.DefaultTheme, bwManager, previewOpts, tmpl)
 
 	// Load persisted download statistics before any handler runs.
 	handlers.InitStats(cfg.StatsFile)
@@ -89,11 +95,26 @@ func logStartup(cfg *config.Config, roots map[string]string, addr string) {
 		log.Printf("  %-18s %s", "Bandwidth limit:", "unlimited")
 	}
 
+	log.Printf("  %-18s images=%s  text=%s  docs=%s",
+		"Previews:",
+		enabledStr(cfg.PreviewImages),
+		enabledStr(cfg.PreviewText),
+		enabledStr(cfg.PreviewDocs),
+	)
+
 	log.Printf("  %-18s %d director%s", "Serving:", len(roots), map[bool]string{true: "y", false: "ies"}[len(roots) == 1])
 	for name, fsPath := range roots {
 		log.Printf("    /%-16s %s", name, fsPath)
 	}
 	log.Println(sep)
+}
+
+// enabledStr returns "on" or "off" for use in startup log lines.
+func enabledStr(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
 }
 
 // formatBandwidth converts a bytes/sec value to a human-readable bits/sec string.

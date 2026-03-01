@@ -17,10 +17,19 @@ import (
 	"gileserver/models"
 )
 
+// PreviewOptions controls which preview types the server will render.
+// All fields default to true (previews enabled); set a field to false to
+// disable that preview type and fall back to the binary info-card instead.
+type PreviewOptions struct {
+	Images bool // render image files inline
+	Text   bool // syntax-highlight text/code files
+	Docs   bool // render Markdown, Org-mode, and HTML as rich documents
+}
+
 // PreviewHandler serves an inline preview page for any path — directory,
 // image, text, or binary/unknown.  All cases are handled here; nothing
 // redirects to a download anymore.
-func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme string, tmpl interface{ ExecutePreview(http.ResponseWriter, *models.PreviewData) error }) http.HandlerFunc {
+func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme string, opts PreviewOptions, tmpl interface{ ExecutePreview(http.ResponseWriter, *models.PreviewData) error }) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		urlPath := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/preview"))
 
@@ -67,13 +76,14 @@ func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme strin
 			pd.MIMEType = mime
 			pd.DownloadURL = "/download" + urlPath
 			pd.ViewURL = "/view" + urlPath
-			img := isImage(mime)
-			txt := isText(mime)
 
 			switch {
-			case img:
+			case isImage(mime) && opts.Images:
+				// Inline image preview enabled.
 				pd.IsImage = true
-			case txt:
+
+			case isText(mime) && opts.Text:
+				// Syntax-highlighted (and optionally rendered) text preview enabled.
 				pd.IsText = true
 				content, err := readTextFile(fsPath)
 				if err != nil {
@@ -87,14 +97,17 @@ func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme strin
 						template.HTMLEscapeString(content) + "</code></pre>")
 				}
 				pd.HighlightedContent = highlighted
-				// Attempt a rich render for supported formats; fall back silently.
-				if isRenderable(mime) {
+				// Attempt a rich render only when document previews are also enabled.
+				if opts.Docs && isRenderable(mime) {
 					if rendered, err := renderContent(content, mime); err == nil {
 						pd.RenderedContent = rendered
 						pd.IsRendered = true
 					}
 				}
+
 			default:
+				// Either the file type has no preview, or the relevant preview
+				// type has been disabled by the admin — show the binary info-card.
 				pd.IsBinary = true
 			}
 		}
