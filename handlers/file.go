@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -107,25 +105,17 @@ func formatSize(b int64) string {
 // IndexHandler serves the search index as JSON.
 // The index is built once and cached with a background refresh on expiry so
 // that repeated search requests never trigger a synchronous full tree walk.
+// The cached value is pre-serialised JSON bytes; no per-request encoding or
+// intermediate buffer allocation is needed.
 func IndexHandler(roots map[string]string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		index := cachedIndex(roots)
+		data := cachedIndexJSON(roots)
 		w.Header().Set("Content-Type", "application/json")
-		encodeJSON(w, index)
+		w.Write(data)
 	}
 }
 
-func encodeJSON(w http.ResponseWriter, v interface{}) {
-	// Encode into a buffer first so that errors can still return a proper
-	// HTTP status.  Writing directly to w would flush an implicit 200 OK,
-	// making any subsequent http.Error call superfluous.
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(v); err != nil {
-		http.Error(w, "JSON encoding error", http.StatusInternalServerError)
-		return
-	}
-	w.Write(buf.Bytes())
-}
+
 
 // buildIndex walks all roots and builds a flat FileIndex.
 func buildIndex(roots map[string]string) *models.FileIndex {
@@ -142,7 +132,10 @@ func walkDir(rootName, fsRoot, dir string, idx *models.FileIndex) {
 		return
 	}
 	for _, e := range entries {
-		rel, err := filepath.Rel(fsRoot, filepath.Join(dir, e.Name()))
+		fullPath := filepath.Join(dir, e.Name())
+		isDir := entryIsDir(dir, e)
+
+		rel, err := filepath.Rel(fsRoot, fullPath)
 		if err != nil {
 			continue
 		}
@@ -150,10 +143,10 @@ func walkDir(rootName, fsRoot, dir string, idx *models.FileIndex) {
 		idx.Files = append(idx.Files, models.IndexEntry{
 			Name: e.Name(),
 			Path: urlPath,
-			Dir:  e.IsDir(),
+			Dir:  isDir,
 		})
-		if e.IsDir() {
-			walkDir(rootName, fsRoot, filepath.Join(dir, e.Name()), idx)
+		if isDir {
+			walkDir(rootName, fsRoot, fullPath, idx)
 		}
 	}
 }

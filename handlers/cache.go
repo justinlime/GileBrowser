@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -36,6 +39,40 @@ var sizeCache struct {
 func init() {
 	sizeCache.entries = make(map[string]*sizeEntry)
 	sizeCache.cond = sync.NewCond(&sizeCache.mu)
+	go sizeCacheGC()
+}
+
+// sizeCacheGC periodically removes entries for paths that no longer exist on
+// disk. This reclaims memory for directories that were deleted or renamed
+// between watcher events (e.g. deep trees removed while the inotify watch
+// limit was in effect).
+func sizeCacheGC() {
+	const gcInterval = 10 * time.Minute
+	for range time.Tick(gcInterval) {
+		// Snapshot keys under the lock, then stat without holding it.
+		sizeCache.mu.Lock()
+		keys := make([]string, 0, len(sizeCache.entries))
+		for k := range sizeCache.entries {
+			keys = append(keys, k)
+		}
+		sizeCache.mu.Unlock()
+
+		var dead []string
+		for _, k := range keys {
+			if _, err := os.Lstat(k); os.IsNotExist(err) {
+				dead = append(dead, k)
+			}
+		}
+
+		if len(dead) > 0 {
+			sizeCache.mu.Lock()
+			for _, k := range dead {
+				delete(sizeCache.entries, k)
+			}
+			sizeCache.mu.Unlock()
+			log.Printf("cache: size GC removed %d stale entries", len(dead))
+		}
+	}
 }
 
 // cachedDirSize returns the cached recursive byte-count for fsPath.
@@ -130,37 +167,61 @@ func invalidateSizePath(fsPath string) {
 	sizeCache.mu.Unlock()
 }
 
+// evictSizePath removes a path from the size cache entirely. Use this when a
+// directory is known to have been deleted or renamed so the entry does not
+// linger in memory indefinitely.
+func evictSizePath(fsPath string) {
+	sizeCache.mu.Lock()
+	delete(sizeCache.entries, fsPath)
+	sizeCache.mu.Unlock()
+}
+
 // ---------------------------------------------------------------------------
 // Search-index cache
 // ---------------------------------------------------------------------------
 
-// indexCache holds one lazily-refreshed search index for all roots.
+// indexCache holds the search index pre-serialised as JSON bytes.
+// Storing []byte instead of *models.FileIndex means:
+//   - The []IndexEntry slice (the bulk of the memory) is released immediately
+//     after serialisation and can be GC'd.
+//   - Every HTTP response writes the same bytes directly with no per-request
+//     re-serialisation or intermediate bytes.Buffer allocation.
 var indexCache struct {
 	mu         sync.Mutex
-	index      *models.FileIndex
+	json       []byte // pre-serialised JSON; nil until first build
 	expires    time.Time
 	refreshing bool
 }
 
-// cachedIndex returns the search index, rebuilding it if stale.
+// serializeIndex JSON-encodes a FileIndex and returns the raw bytes.
+// The FileIndex itself is not retained after this call.
+func serializeIndex(idx *models.FileIndex) []byte {
+	b, err := json.Marshal(idx)
+	if err != nil {
+		// Fallback to an empty index rather than serving nothing.
+		return []byte(`{"files":[]}`)
+	}
+	return b
+}
+
+// cachedIndexJSON returns the pre-serialised JSON for the search index,
+// rebuilding it in the background when stale.
 //
 //   - First request: builds synchronously (guaranteed non-nil return).
-//   - Subsequent stale hits: returns the old index immediately and triggers a
-//     single background goroutine to refresh it. The refreshing flag prevents
-//     duplicate concurrent refreshes. A deferred reset ensures the flag is
-//     always cleared, even if buildIndex panics.
-func cachedIndex(roots map[string]string) *models.FileIndex {
+//   - Subsequent stale hits: returns the old bytes immediately and triggers a
+//     single background goroutine to refresh; callers never block on a walk.
+func cachedIndexJSON(roots map[string]string) []byte {
 	indexCache.mu.Lock()
-	idx := indexCache.index
+	data := indexCache.json
 	expired := time.Now().After(indexCache.expires)
 	refreshing := indexCache.refreshing
 	indexCache.mu.Unlock()
 
-	if idx == nil {
+	if data == nil {
 		// First request ever: build synchronously so we never return nil.
-		fresh := buildIndex(roots)
+		fresh := serializeIndex(buildIndex(roots))
 		indexCache.mu.Lock()
-		indexCache.index = fresh
+		indexCache.json = fresh
 		indexCache.expires = time.Now().Add(safetyTTL)
 		indexCache.mu.Unlock()
 		return fresh
@@ -181,18 +242,18 @@ func cachedIndex(roots map[string]string) *models.FileIndex {
 				indexCache.mu.Unlock()
 			}()
 
-			fresh := buildIndex(roots)
+			fresh := serializeIndex(buildIndex(roots))
 			indexCache.mu.Lock()
-			indexCache.index = fresh
+			indexCache.json = fresh
 			indexCache.expires = time.Now().Add(safetyTTL)
 			indexCache.mu.Unlock()
 		}()
 	}
 
-	return idx
+	return data
 }
 
-// invalidateIndex marks the index as expired so the next call to cachedIndex
+// invalidateIndex marks the index as expired so the next call to cachedIndexJSON
 // triggers a background rebuild.  Any in-flight refresh is left to complete.
 func invalidateIndex() {
 	indexCache.mu.Lock()
@@ -204,6 +265,22 @@ func invalidateIndex() {
 // Startup cache warming
 // ---------------------------------------------------------------------------
 
+// collectDirs sends root and every subdirectory beneath it into dirs.
+// It is used by WarmCache to discover paths for size pre-warming without
+// retaining a full FileIndex in memory.
+func collectDirs(root string, dirs chan<- string) {
+	dirs <- root
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if entryIsDir(root, e) {
+			collectDirs(filepath.Join(root, e.Name()), dirs)
+		}
+	}
+}
+
 // WarmCache pre-populates the directory-size cache and the search index in
 // the background so that the very first page load is served from cache.
 //
@@ -214,9 +291,10 @@ func WarmCache(roots map[string]string) {
 		log.Println("cache: warming started")
 
 		// Build the search index — the single most expensive walk.
-		idx := buildIndex(roots)
+		// Serialise immediately so the []IndexEntry slice can be GC'd.
+		fresh := serializeIndex(buildIndex(roots))
 		indexCache.mu.Lock()
-		indexCache.index = idx
+		indexCache.json = fresh
 		indexCache.expires = time.Now().Add(safetyTTL)
 		indexCache.mu.Unlock()
 
@@ -236,41 +314,11 @@ func WarmCache(roots map[string]string) {
 			}()
 		}
 
+		// Walk each root to collect all directory paths for size warming.
+		// This mirrors what buildIndex does but only retains directories,
+		// avoiding the need to keep (or decode) a full FileIndex in memory.
 		for _, fsRoot := range roots {
-			dirs <- fsRoot
-		}
-
-		for _, entry := range idx.Files {
-			if !entry.Dir {
-				continue
-			}
-			// Reconstruct the filesystem path from the URL path /<rootName>/…
-			urlPath := entry.Path
-			if len(urlPath) <= 1 {
-				continue
-			}
-			rel := urlPath[1:] // strip leading "/"
-			rootName, rest := rel, ""
-			for i, c := range rel {
-				if c == '/' {
-					rootName = rel[:i]
-					rest = rel[i+1:]
-					break
-				}
-			}
-			if fsRoot, ok := roots[rootName]; ok {
-				var fsDir string
-				if rest == "" {
-					fsDir = fsRoot
-				} else {
-					fsDir = joinPath(fsRoot, rest)
-				}
-				select {
-				case dirs <- fsDir:
-				default:
-					// Channel full — handler will compute on demand.
-				}
-			}
+			collectDirs(fsRoot, dirs)
 		}
 
 		close(dirs)

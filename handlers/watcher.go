@@ -62,7 +62,7 @@ func watchRecursive(w *fsnotify.Watcher, dir string) error {
 			log.Printf("watcher: skipping %s: %v", path, err)
 			return nil
 		}
-		if !d.IsDir() {
+		if !entryIsDir(filepath.Dir(path), d) {
 			return nil
 		}
 		if err := w.Add(path); err != nil {
@@ -97,9 +97,16 @@ func handleEvent(w *fsnotify.Watcher, roots map[string]string, event fsnotify.Ev
 		}
 	}
 
-	// Invalidate the size cache for the changed path and every ancestor
-	// directory up to (and including) each root.  A file change at any
-	// depth affects the cumulative size of all directories above it.
+	// When a directory is removed or renamed, evict its size-cache entry
+	// entirely rather than just marking it stale. The path no longer exists
+	// so there is nothing to recompute — keeping it would waste memory.
+	if event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
+		evictSizePath(event.Name)
+	}
+
+	// Invalidate (mark stale) the size for the parent directory and every
+	// ancestor up to the root. A file change at any depth affects the
+	// cumulative size of all directories above it.
 	invalidateSizeChain(roots, filepath.Dir(event.Name))
 
 	// Any structural change (new file/dir, removal, rename) means the search
