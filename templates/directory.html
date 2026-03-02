@@ -24,7 +24,7 @@
     {{end}}
   </div>
 </div>
-<h1 class="dir-title">{{.Title}}</h1>
+<h1 class="dir-title">{{if .IsRoot}}root{{else}}{{.Title}}{{end}}</h1>
 
 {{if .Entries}}
 <table class="file-table">
