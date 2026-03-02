@@ -1043,9 +1043,10 @@ a:hover {
     display: block;
   }
 
-  /* remove table border on mobile */
+  /* remove table border and shadow on mobile */
   .file-table {
     border: none !important;
+    box-shadow: none !important;
   }
 
   /* hide the column header row */
