@@ -754,6 +754,39 @@ a:hover {
   border-radius: var(--radius);
   overflow: auto;
   box-shadow: var(--shadow);
+  position: relative;
+}
+
+/* Copy button for full text preview */
+.text-preview .copy-btn {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.8rem;
+  z-index: 10;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+}
+.text-preview .copy-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.text-preview .copy-btn:active {
+  background: var(--accent);
+  color: var(--ctp-base);
+}
+.text-preview .copy-btn.copied {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--ctp-base);
 }
 
 .text-preview .chroma {
@@ -849,11 +882,57 @@ a:hover {
   background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.2rem 1.5rem;
+  padding: 0; /* removed to accommodate copy button header */
   overflow-x: auto;
   margin: 1.2rem 0;
+  position: relative;
 }
-.rendered-preview pre code {
+
+/* Code block wrapper for positioning copy button */
+.rendered-preview pre .code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Copy button for code blocks */
+.rendered-preview .copy-code-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.rendered-preview .copy-code-btn:hover {
+  background: var(--surface2);
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+.rendered-preview .copy-code-btn:active {
+  background: var(--accent-dim);
+  color: var(--text);
+}
+.rendered-preview .copy-code-btn.copied {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--ctp-base);
+}
+
+.rendered-preview pre .code-content {
+  padding: 1.2rem 1.5rem;
+  overflow-x: auto;
+}
+.rendered-preview pre .code-content code {
   background: none;
   border: none;
   padding: 0;
@@ -1196,6 +1275,25 @@ a:hover {
   }
   .text-preview .chroma {
     font-size: 0.95rem;
+  }
+  .text-preview .copy-btn {
+    top: 0.4rem;
+    right: 0.5rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+  }
+
+  /* rendered preview code blocks on mobile */
+  .rendered-preview pre .code-header {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.78rem;
+  }
+  .rendered-preview .copy-code-btn {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.72rem;
+  }
+  .rendered-preview pre .code-content {
+    padding: 0.75rem;
   }
 
   /* image preview - smaller max height */

@@ -221,4 +221,224 @@
     });
   })();
 
+  // ------------------------------------------------------------------ //
+  // Copy button functionality                                           //
+  // ------------------------------------------------------------------ //
+
+  (function () {
+    /**
+     * Show a temporary "Copied!" state on the button.
+     */
+    function showCopiedState(button, duration) {
+      if (!duration) duration = 1500;
+      var originalText = button.textContent;
+      button.textContent = "Copied!";
+      button.classList.add("copied");
+
+      setTimeout(function () {
+        button.textContent = originalText;
+        button.classList.remove("copied");
+      }, duration);
+    }
+
+    /**
+     * Copy text to clipboard using the modern Clipboard API with fallback.
+     */
+    function copyToClipboard(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).then(function () {
+          return true;
+        }).catch(function (err) {
+          console.warn("Clipboard API failed, falling back:", err);
+          return fallbackCopy(text);
+        });
+      } else {
+        return fallbackCopy(text);
+      }
+    }
+
+    /**
+     * Fallback copy method using execCommand (deprecated but widely supported).
+     */
+    function fallbackCopy(text) {
+      var textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+
+      try {
+        var successful = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return Promise.resolve(successful);
+      } catch (err) {
+        document.body.removeChild(textarea);
+        console.error("Fallback copy failed:", err);
+        return Promise.reject(err);
+      }
+    }
+
+    /**
+     * Extract plain text from a Chroma syntax-highlighted table.
+     * The table has two columns: line numbers and code content.
+     */
+    function extractTextFromChroma(chromaEl) {
+      var rows = chromaEl.querySelectorAll("tr");
+      var lines = [];
+
+      rows.forEach(function (row) {
+        var cells = row.querySelectorAll("td");
+        if (cells.length > 1) {
+          // Second column contains the actual code content
+          var codeCell = cells[1];
+          var text = codeCell.textContent;
+          lines.push(text);
+        } else if (cells.length === 1) {
+          // Fallback: use the only cell's text
+          lines.push(cells[0].textContent);
+        }
+      });
+
+      return lines.join("\n");
+    }
+
+    /**
+     * Set up copy button for full text preview.
+     */
+    (function () {
+      var textPreview = document.querySelector(".text-preview");
+      if (!textPreview) return;
+
+      var chromaEl = textPreview.querySelector(".chroma");
+      if (!chromaEl) return;
+
+      // Create the copy button
+      var copyBtn = document.createElement("button");
+      copyBtn.className = "copy-btn";
+      copyBtn.textContent = "Copy";
+      copyBtn.type = "button";
+      textPreview.appendChild(copyBtn);
+
+      // Handle click
+      copyBtn.addEventListener("click", function () {
+        var textContent = extractTextFromChroma(chromaEl);
+        copyToClipboard(textContent).then(function () {
+          showCopiedState(copyBtn);
+        }).catch(function (err) {
+          console.error("Failed to copy:", err);
+          copyBtn.textContent = "Error";
+          setTimeout(function () {
+            copyBtn.textContent = "Copy";
+          }, 1500);
+        });
+      });
+    })();
+
+    /**
+     * Set up copy buttons for code blocks in rendered content (Markdown/Org).
+     */
+    (function () {
+      var renderedPreview = document.querySelector(".rendered-preview");
+      if (!renderedPreview) return;
+
+      // Find all pre elements that contain code (but not those already processed)
+      var preElements = renderedPreview.querySelectorAll("pre:not(.has-copy-btn)");
+      if (preElements.length === 0) return;
+
+      preElements.forEach(function (pre) {
+        // Mark as processed
+        pre.classList.add("has-copy-btn");
+
+        // Check if this is a Chroma-highlighted block or plain code
+        var codeEl = pre.querySelector("code");
+        if (!codeEl && !pre.querySelector(".chroma")) {
+          return; // No code to copy
+        }
+
+        // Wrap content in a code-content div
+        var codeContent = document.createElement("div");
+        codeContent.className = "code-content";
+
+        // Move all children (the actual code) into the wrapper
+        while (pre.firstChild) {
+          codeContent.appendChild(pre.firstChild);
+        }
+
+        // Create header with copy button
+        var header = document.createElement("div");
+        header.className = "code-header";
+
+        var langLabel = document.createElement("span");
+        langLabel.className = "code-lang";
+
+        // Try to detect language from Chroma classes
+        var chromaEl = pre.querySelector(".chroma");
+        if (chromaEl) {
+          // Look for language class like "language-python" or similar
+          var codeInChroma = chromaEl.querySelector("code");
+          if (codeInChroma) {
+            var langMatch = codeInChroma.className.match(/language-(\w+)/);
+            if (langMatch) {
+              langLabel.textContent = langMatch[1];
+            } else {
+              // Check parent classes
+              var classList = chromaEl.classList;
+              for (var i = 0; i < classList.length; i++) {
+                if (classList[i].startsWith("language-")) {
+                  langLabel.textContent = classList[i].replace("language-", "");
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (!langLabel.textContent) {
+          langLabel.textContent = "code";
+        }
+
+        var copyCodeBtn = document.createElement("button");
+        copyCodeBtn.className = "copy-code-btn";
+        copyCodeBtn.textContent = "Copy";
+        copyCodeBtn.type = "button";
+
+        header.appendChild(langLabel);
+        header.appendChild(copyCodeBtn);
+
+        // Prepend header and add content wrapper back to pre
+        pre.insertBefore(header, pre.firstChild);
+        pre.appendChild(codeContent);
+
+        // Handle click
+        copyCodeBtn.addEventListener("click", function () {
+          var textToCopy;
+
+          if (chromaEl) {
+            // Chroma-highlighted code - extract from table
+            textToCopy = extractTextFromChroma(chromaEl);
+          } else if (codeEl) {
+            // Plain code block
+            textToCopy = codeEl.textContent;
+          } else {
+            // Fallback: get all text from pre
+            textToCopy = pre.textContent.replace(/\s*$/, "");
+          }
+
+          copyToClipboard(textToCopy).then(function () {
+            showCopiedState(copyCodeBtn);
+          }).catch(function (err) {
+            console.error("Failed to copy:", err);
+            copyCodeBtn.textContent = "Error";
+            setTimeout(function () {
+              copyCodeBtn.textContent = "Copy";
+            }, 1500);
+          });
+        });
+      });
+    })();
+
+  })();
+
 })();

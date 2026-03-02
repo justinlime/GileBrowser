@@ -102,3 +102,11 @@ This approach ensures that explicit CLI arguments take precedence, while still a
 3. **Error Handling**: Proper error propagation and user-friendly messages
 4. **Security**: Validate file paths, prevent directory traversal attacks
 5. **Performance**: Handle large files efficiently, proper streaming
+
+## Build & Test Policy
+- **Isolated Execution**: All builds and tests must be run from `/tmp` to avoid polluting the repository with build artifacts, test binaries, or temporary files
+- **Clean Repository**: The source repository should remain clean of generated files at all times
+- **Example Workflow**: 
+  - Copy source to `/tmp/gileserver-build/` before building
+  - Run `go build` and `go test` from the `/tmp` location
+  - Never commit build artifacts or test output to version control
