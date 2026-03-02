@@ -15,16 +15,54 @@ import (
 )
 
 const (
-	// ZIP format constants for Store method (no compression, no Modified timestamp).
-	// These values assume zip.FileHeader.Modified is NOT set (zero value), which
-	// prevents Go from writing extended-timestamp extra fields that would otherwise
-	// add 9 bytes per local header and 5 bytes per central-directory entry and
-	// silently break the pre-calculated Content-Length.
-	localHeaderSize     = 30           // bytes before filename in local file header
-	dataDescriptorSize  = 16           // signature(4) + CRC32(4) + comp_size(4) + uncomp_size(4); always written by Go (GP bit 3)
-	centralDirEntrySize = 46           // bytes before filename in central directory entry
-	endRecordSize       = 22           // end of central directory record
-	copyBufferSize      = 128 * 1024   // 128 KB buffer for faster io.Copy
+	// ---------------------------------------------------------------------------
+	// ZIP format constants — sourced directly from archive/zip/struct.go in the
+	// Go standard library. All values assume zip.Store (no compression) and that
+	// FileHeader.Modified is NOT set (zero value).
+	//
+	// Setting Modified causes Go to emit an extended-timestamp extra field
+	// (9 bytes per local header, 5 bytes per central-directory entry) which
+	// would silently invalidate the pre-calculated Content-Length.
+	// ---------------------------------------------------------------------------
+
+	// Local file header: 30 fixed bytes + filename (no extra when using Store +
+	// GP bit 3, because sizes are written as zero at header time — zip64 is
+	// never triggered in the local header with this write strategy).
+	localHeaderSize = 30 // archive/zip: fileHeaderLen
+
+	// Data descriptor written after each file's data (GP bit 3 is always set
+	// by Go's zip writer). The size depends on whether the file needs zip64:
+	//   normal : 4 (sig) + 4 (crc32) + 4 (comp) + 4 (uncomp)       = 16 bytes
+	//   zip64  : 4 (sig) + 4 (crc32) + 8 (comp) + 8 (uncomp)       = 24 bytes
+	dataDescriptorSize   = 16 // archive/zip: dataDescriptorLen
+	dataDescriptor64Size = 24 // archive/zip: dataDescriptor64Len
+
+	// Central directory entry: 46 fixed bytes + filename [+ zip64 extra].
+	// The 28-byte zip64 extra block is appended by Go when either:
+	//   (a) the file's uncompressed/compressed size > uint32max, OR
+	//   (b) the file's local-header offset within the archive >= uint32max
+	// Both conditions must be checked when computing central-directory sizes.
+	centralDirEntrySize  = 46 // archive/zip: directoryHeaderLen
+	zip64CentralExtraSize = 28 // 2×uint16 (ID+len) + 3×uint64 (sizes+offset)
+
+	// End of central directory record (always present).
+	endRecordSize = 22 // archive/zip: directoryEndLen
+
+	// ZIP64 end-of-central-directory structures, written when any of:
+	//   · number of entries  >= 0xFFFF     (uint16max)
+	//   · central dir size   >= 0xFFFFFFFF (uint32max)
+	//   · central dir offset >= 0xFFFFFFFF (uint32max)
+	// The locator immediately precedes the regular EOCD; the zip64 EOCD
+	// immediately precedes the locator.
+	zip64EndRecordSize  = 56 // archive/zip: directory64EndLen
+	zip64LocatorSize    = 20 // archive/zip: directory64LocLen
+	zip64EndTotalSize   = zip64EndRecordSize + zip64LocatorSize // 76 bytes
+
+	// Thresholds matching Go's internal uint32max / uint16max.
+	zip32Max   = (1 << 32) - 1 // 0xFFFFFFFF
+	zip16Max   = (1 << 16) - 1 // 0x0000FFFF
+
+	copyBufferSize = 128 * 1024 // 128 KB I/O buffer for faster copies
 )
 
 // ZipHandler streams a directory as a ZIP archive.
@@ -107,131 +145,242 @@ type zipEntry struct {
 }
 
 // collectEntries walks fsPath and returns all files with their archive names
-// rooted at prefix. It follows symlinks and prevents infinite recursion by
-// tracking visited inodes (on Unix) or resolved paths (on Windows).
+// rooted at prefix. It follows symlinks (including symlinks to directories)
+// and prevents infinite recursion by tracking every resolved real path that
+// has been visited.
 func collectEntries(fsPath, prefix string) ([]zipEntry, error) {
-	var entries []zipEntry
+	// Resolve the root itself so it is in the visited set from the start,
+	// preventing a symlink inside the tree from looping back to the root.
+	realRoot, err := filepath.EvalSymlinks(fsPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolving root %s: %w", fsPath, err)
+	}
 
-	// Track visited directories to prevent infinite loops from circular symlinks.
-	// We use the real path (with symlinks resolved) as the key.
 	visited := make(map[string]struct{})
+	visited[realRoot] = struct{}{}
 
-	err := filepath.Walk(fsPath, func(filePath string, fi os.FileInfo, err error) error {
-		if err != nil {
-			// Skip files/directories we can't access but continue walking.
-			log.Printf("zip  warning    skip=%s  err=%v", filePath, err)
-			return nil
-		}
-
-		isSymlink := (fi.Mode() & os.ModeSymlink) != 0
-
-		// For symlinks, we need to resolve them and check for cycles.
-		if isSymlink {
-			// Get the real path to detect circular references.
-			realPath, err := filepath.EvalSymlinks(filePath)
-			if err != nil {
-				// Broken symlink - skip it but continue.
-				log.Printf("zip  warning    broken-symlink=%s  err=%v", filePath, err)
-				return nil
-			}
-
-			// Check if we've already visited this real path (cycle detection).
-			if _, exists := visited[realPath]; exists {
-				log.Printf("zip  warning    cycle-detected=%s  real=%s", filePath, realPath)
-				return nil
-			}
-
-			// Mark as visited.
-			visited[realPath] = struct{}{}
-
-			// Re-stat the resolved path to get actual info.
-			fi, err = os.Stat(realPath)
-			if err != nil {
-				log.Printf("zip  warning    cannot-stat-resolved=%s  real=%s  err=%v", filePath, realPath, err)
-				return nil
-			}
-
-			// Update filePath to the resolved path for actual file access.
-			filePath = realPath
-		} else if fi.IsDir() {
-			// For regular directories, also track them to catch symlink->dir cycles.
-			realPath, err := filepath.EvalSymlinks(filePath)
-			if err == nil {
-				if _, exists := visited[realPath]; exists {
-					log.Printf("zip  warning    cycle-detected=%s  real=%s", filePath, realPath)
-					return filepath.SkipDir
-				}
-				visited[realPath] = struct{}{}
-			}
-		}
-
-		if fi.IsDir() {
-			return nil // Skip directories themselves.
-		}
-
-		rel, err := filepath.Rel(fsPath, filePath)
-		if err != nil {
-			log.Printf("zip  warning    cannot-calc-rel=%s  from=%s  err=%v", filePath, fsPath, err)
-			return nil
-		}
-
-		entries = append(entries, zipEntry{
-			fsPath:  filePath,
-			zipName: prefix + "/" + filepath.ToSlash(rel),
-			size:    fi.Size(),
-		})
-		return nil
-	})
+	var entries []zipEntry
+	err = walkEntries(realRoot, prefix, visited, &entries)
 	return entries, err
 }
 
+// walkEntries recursively collects zip entries under fsPath, using zipPrefix
+// as the archive path for the contents of this directory. visited is shared
+// across all recursive calls to detect cycles from symlinks.
+//
+// filepath.Walk is intentionally avoided here because it does not follow
+// symlinks into directories — it calls the walk function with the symlink's
+// own FileInfo and never descends. We use os.ReadDir + os.Lstat instead so
+// we can detect symlinks ourselves and recurse into their targets explicitly.
+func walkEntries(fsPath, zipPrefix string, visited map[string]struct{}, entries *[]zipEntry) error {
+	dirEntries, err := os.ReadDir(fsPath)
+	if err != nil {
+		log.Printf("zip  warning    cannot-read-dir=%s  err=%v", fsPath, err)
+		return nil // skip unreadable directory but don't abort the whole walk
+	}
+
+	for _, de := range dirEntries {
+		filePath := filepath.Join(fsPath, de.Name())
+		zipName := zipPrefix + "/" + de.Name()
+
+		// Lstat so we see the symlink itself, not its target.
+		fi, err := os.Lstat(filePath)
+		if err != nil {
+			log.Printf("zip  warning    lstat=%s  err=%v", filePath, err)
+			continue
+		}
+
+		if fi.Mode()&os.ModeSymlink != 0 {
+			// Resolve the symlink and check for cycles before deciding what to do.
+			realPath, err := filepath.EvalSymlinks(filePath)
+			if err != nil {
+				log.Printf("zip  warning    broken-symlink=%s  err=%v", filePath, err)
+				continue
+			}
+
+			if _, exists := visited[realPath]; exists {
+				log.Printf("zip  warning    cycle-detected=%s  real=%s", filePath, realPath)
+				continue
+			}
+			visited[realPath] = struct{}{}
+
+			// Stat the resolved target to find out if it's a file or directory.
+			targetInfo, err := os.Stat(realPath)
+			if err != nil {
+				log.Printf("zip  warning    cannot-stat-resolved=%s  real=%s  err=%v", filePath, realPath, err)
+				continue
+			}
+
+			if targetInfo.IsDir() {
+				// Recurse into the symlinked directory using the resolved path
+				// so that further os.ReadDir calls work correctly, but keep
+				// zipName derived from the original (logical) path so the
+				// archive structure mirrors what the user sees on disk.
+				if err := walkEntries(realPath, zipName, visited, entries); err != nil {
+					log.Printf("zip  warning    walk-symdir=%s  err=%v", realPath, err)
+				}
+			} else {
+				// Symlink to a regular file — add it directly.
+				*entries = append(*entries, zipEntry{
+					fsPath:  realPath,
+					zipName: zipName,
+					size:    targetInfo.Size(),
+				})
+			}
+			continue
+		}
+
+		if fi.IsDir() {
+			// Regular directory: track its real path and recurse.
+			realPath, err := filepath.EvalSymlinks(filePath)
+			if err != nil {
+				log.Printf("zip  warning    evalsymlinks=%s  err=%v", filePath, err)
+				realPath = filePath // best-effort fallback
+			}
+			if _, exists := visited[realPath]; exists {
+				log.Printf("zip  warning    cycle-detected=%s  real=%s", filePath, realPath)
+				continue
+			}
+			visited[realPath] = struct{}{}
+
+			if err := walkEntries(filePath, zipName, visited, entries); err != nil {
+				log.Printf("zip  warning    walk-dir=%s  err=%v", filePath, err)
+			}
+			continue
+		}
+
+		// Regular file.
+		*entries = append(*entries, zipEntry{
+			fsPath:  filePath,
+			zipName: zipName,
+			size:    fi.Size(),
+		})
+	}
+
+	return nil
+}
+
 // calculateZipSize pre-calculates the exact ZIP archive size without reading
-// file data. This relies on two important assumptions that must be matched in
-// buildZip:
+// file data. It mirrors every byte that buildZip will emit, including all
+// ZIP64 structures that Go's archive/zip package emits automatically.
 //
-//  1. Method = zip.Store (no compression — data size == file size exactly).
-//  2. Modified is NOT set on the FileHeader (zero value). Setting Modified
-//     causes Go to emit an extended-timestamp extra field (9 bytes in the local
-//     header, 5 bytes in the central-directory entry) which would silently
-//     invalidate the Content-Length we send to the client.
+// # Assumptions that must be maintained in buildZip
 //
-// Formula per file:
+//  1. Method = zip.Store — data size equals file size exactly (no compression).
+//  2. Modified is NOT set on FileHeader (zero value). Setting Modified causes
+//     Go to emit extended-timestamp extra fields (9 bytes per local header,
+//     5 bytes per central-directory entry) which would silently break the
+//     pre-calculated Content-Length.
 //
-//	local header:      30 + len(filename)
-//	file data:         file size (unchanged by Store)
-//	data descriptor:   16  (Go always writes this when GP bit 3 is set)
-//	central dir entry: 46 + len(filename)
+// # Structure sizes (from archive/zip/struct.go)
 //
-// Plus a single 22-byte end-of-central-directory record.
+// Per file — local section:
+//
+//	local file header : 30 + len(filename)
+//	  (no zip64 extra: with Store + GP bit 3, sizes are 0 when the local
+//	   header is written, so isZip64() is false and no extra is appended)
+//	file data         : file size (Store = no compression)
+//	data descriptor   : 16 bytes normally, 24 bytes when file size > uint32max
+//
+// Per file — central directory section:
+//
+//	central dir entry : 46 + len(filename) [+ 28 zip64 extra]
+//	  zip64 extra is appended by Go when EITHER:
+//	    · file size > uint32max (individual file is large), OR
+//	    · the file's local-header offset within the archive >= uint32max
+//	      (cumulative archive bytes so far crossed the 4 GiB boundary)
+//
+// Footer:
+//
+//	zip64 EOCD record   : 56 bytes  ┐ only written when ANY of:
+//	zip64 EOCD locator  : 20 bytes  ┘   entries >= 65535, or central dir
+//	                                     size or offset >= uint32max
+//	end of central dir  : 22 bytes  (always present)
 func calculateZipSize(entries []zipEntry) int64 {
 	var totalSize int64
 
-	for _, e := range entries {
-		filenameLen := int64(len(e.zipName))
+	// -------------------------------------------------------------------------
+	// Pass 1 — local sections (header + data + data-descriptor) for every file.
+	// Track the running byte offset so Pass 2 can decide per-entry whether the
+	// offset triggers a zip64 central-directory extra field.
+	// -------------------------------------------------------------------------
+	offsets := make([]int64, len(entries)) // local-header byte offset for each entry
 
-		// Local file header + filename
-		totalSize += int64(localHeaderSize) + filenameLen
+	var localOffset int64
+	for i, e := range entries {
+		offsets[i] = localOffset
 
-		// File data (Store = no compression)
-		totalSize += e.size
+		nameLen := int64(len(e.zipName))
 
-		// Data descriptor written by Go (GP flag bit 3 set)
-		totalSize += int64(dataDescriptorSize)
+		// Local file header: fixed 30 bytes + filename.
+		// No zip64 extra because Go writes zero sizes here (GP bit 3 / Store).
+		localHeader := int64(localHeaderSize) + nameLen
+
+		// File data: unchanged by Store.
+		fileData := e.size
+
+		// Data descriptor: 16 bytes normally, 24 for zip64 files.
+		var dd int64
+		if e.size > zip32Max {
+			dd = dataDescriptor64Size
+		} else {
+			dd = dataDescriptorSize
+		}
+
+		blockSize := localHeader + fileData + dd
+		totalSize += blockSize
+		localOffset += blockSize
 	}
 
-	// Central directory entries (written after all file data)
-	for _, e := range entries {
-		filenameLen := int64(len(e.zipName))
-		totalSize += int64(centralDirEntrySize) + filenameLen
+	// -------------------------------------------------------------------------
+	// Pass 2 — central directory entries.
+	// A 28-byte zip64 extra is appended by Go when the file's size exceeds
+	// uint32max OR when its local-header offset within the archive has reached
+	// uint32max. Both conditions are checked independently per entry.
+	// -------------------------------------------------------------------------
+	var centralDirStart int64 = localOffset // central dir begins right after all local sections
+	var centralDirSize int64
+
+	for i, e := range entries {
+		nameLen := int64(len(e.zipName))
+
+		needsZip64 := e.size > zip32Max || offsets[i] >= zip32Max
+
+		var extra int64
+		if needsZip64 {
+			extra = zip64CentralExtraSize // 28 bytes
+		}
+
+		entrySize := int64(centralDirEntrySize) + nameLen + extra
+		totalSize += entrySize
+		centralDirSize += entrySize
 	}
 
-	// End of central directory record
-	totalSize += int64(endRecordSize)
+	// -------------------------------------------------------------------------
+	// Footer: ZIP64 EOCD structures + regular EOCD.
+	//
+	// Go emits the zip64 EOCD record (56 B) + zip64 locator (20 B) when ANY of:
+	//   · number of entries  >= uint16max (65535)
+	//   · central dir size   >= uint32max
+	//   · central dir offset >= uint32max
+	// The regular EOCD (22 bytes) is always present.
+	// -------------------------------------------------------------------------
+	numEntries := int64(len(entries))
+	needsZip64Footer := numEntries >= zip16Max ||
+		centralDirSize >= zip32Max ||
+		centralDirStart >= zip32Max
+
+	if needsZip64Footer {
+		totalSize += zip64EndTotalSize // 56 (record) + 20 (locator) = 76 bytes
+	}
+
+	totalSize += int64(endRecordSize) // 22 bytes, always
 
 	return totalSize
 }
 
 // buildZip writes all entries into w as a ZIP archive using Store compression.
+//
 // IMPORTANT: Modified is intentionally left unset (zero value) so that Go does
 // not emit extended-timestamp extra fields, keeping the on-wire size consistent
 // with calculateZipSize. If you ever need to preserve timestamps, you must also
