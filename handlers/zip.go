@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+
+
 // ZipHandler streams a directory as a ZIP archive.
 // When the URL resolves to the server root ("/"), all configured root
 // directories are bundled together into a single archive named after siteName.
@@ -94,17 +96,74 @@ type zipEntry struct {
 }
 
 // collectEntries walks fsPath and returns all files with their archive names
-// rooted at prefix.
+// rooted at prefix. It follows symlinks and prevents infinite recursion by
+// tracking visited inodes (on Unix) or resolved paths (on Windows).
 func collectEntries(fsPath, prefix string) ([]zipEntry, error) {
 	var entries []zipEntry
+	
+	// Track visited directories to prevent infinite loops from circular symlinks.
+	// We use the real path (with symlinks resolved) as the key.
+	visited := make(map[string]struct{})
+	
 	err := filepath.Walk(fsPath, func(filePath string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
+		if err != nil {
+			// Skip files/directories we can't access but continue walking.
+			log.Printf("zip  warning    skip=%s  err=%v", filePath, err)
 			return nil
 		}
+
+		isSymlink := (fi.Mode() & os.ModeSymlink) != 0
+		
+		// For symlinks, we need to resolve them and check for cycles.
+		if isSymlink {
+			// Get the real path to detect circular references.
+			realPath, err := filepath.EvalSymlinks(filePath)
+			if err != nil {
+				// Broken symlink - skip it but continue.
+				log.Printf("zip  warning    broken-symlink=%s  err=%v", filePath, err)
+				return nil
+			}
+			
+			// Check if we've already visited this real path (cycle detection).
+			if _, exists := visited[realPath]; exists {
+				log.Printf("zip  warning    cycle-detected=%s  real=%s", filePath, realPath)
+				return nil
+			}
+			
+			// Mark as visited.
+			visited[realPath] = struct{}{}
+			
+			// Re-stat the resolved path to get actual info.
+			fi, err = os.Stat(realPath)
+			if err != nil {
+				log.Printf("zip  warning    cannot-stat-resolved=%s  real=%s  err=%v", filePath, realPath, err)
+				return nil
+			}
+			
+			// Update filePath to the resolved path for actual file access.
+			filePath = realPath
+		} else if fi.IsDir() {
+			// For regular directories, also track them to catch symlink->dir cycles.
+			realPath, err := filepath.EvalSymlinks(filePath)
+			if err == nil {
+				if _, exists := visited[realPath]; exists {
+					log.Printf("zip  warning    cycle-detected=%s  real=%s", filePath, realPath)
+					return filepath.SkipDir
+				}
+				visited[realPath] = struct{}{}
+			}
+		}
+
+		if fi.IsDir() {
+			return nil // Skip directories themselves.
+		}
+
 		rel, err := filepath.Rel(fsPath, filePath)
 		if err != nil {
+			log.Printf("zip  warning    cannot-calc-rel=%s  from=%s  err=%v", filePath, fsPath, err)
 			return nil
 		}
+		
 		entries = append(entries, zipEntry{
 			fsPath:  filePath,
 			zipName: prefix + "/" + filepath.ToSlash(rel),
