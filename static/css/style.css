@@ -551,7 +551,7 @@ a:hover {
   text-decoration: none;
   border: 1px solid transparent;
   transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
-  box-shadow: var(--shadow);
+  box-shadow: 0 6px 8px -2px rgba(0, 0, 0, 0.2), 0 4px 6px -3px rgba(0, 0, 0, 0.1);
 }
 
 .btn-primary {
@@ -562,6 +562,7 @@ a:hover {
 .btn-primary:hover {
   background: var(--ctp-blue);
   border-color: var(--ctp-blue);
+  box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.25), 0 6px 8px -4px rgba(0, 0, 0, 0.15);
   text-decoration: none;
 }
 
@@ -574,6 +575,7 @@ a:hover {
   background: var(--accent);
   color: var(--ctp-base);
   border-color: var(--accent);
+  box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.25), 0 6px 8px -4px rgba(0, 0, 0, 0.15);
   text-decoration: none;
 }
 
@@ -587,6 +589,7 @@ a:hover {
   background: var(--accent);
   color: var(--ctp-base);
   border-color: var(--accent);
+  box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.25), 0 6px 8px -4px rgba(0, 0, 0, 0.15);
   text-decoration: none;
 }
 
@@ -598,6 +601,7 @@ a:hover {
 .btn-blue:hover {
   background: var(--ctp-sapphire);
   border-color: var(--ctp-sapphire);
+  box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.25), 0 6px 8px -4px rgba(0, 0, 0, 0.15);
   color: var(--ctp-base);
   text-decoration: none;
 }
@@ -610,6 +614,7 @@ a:hover {
 .btn-back:hover {
   background: #f38ba8;
   border-color: #f38ba8;
+  box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.25), 0 6px 8px -4px rgba(0, 0, 0, 0.15);
   color: var(--ctp-base);
   text-decoration: none;
 }
@@ -994,10 +999,12 @@ a:hover {
     gap: 0.6rem;
     padding: 0.75rem 1rem;
     align-items: center;
+    justify-content: center;
   }
   .site-title {
     order: 0;
     flex-shrink: 0;
+    text-align: center;
   }
   .search-wrap {
     order: 1;
