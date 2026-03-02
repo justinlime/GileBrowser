@@ -354,9 +354,9 @@ a:hover {
   white-space: nowrap;
   flex-shrink: 0;
 }
+.search-result-item:hover .result-size,
 .search-result-item.active .result-size {
   color: var(--ctp-base);
-  opacity: 0.65;
 }
 .search-result-item .result-path {
   color: var(--text-muted);
@@ -367,9 +367,9 @@ a:hover {
   direction: rtl;
   text-align: left;
 }
+.search-result-item:hover .result-path,
 .search-result-item.active .result-path {
   color: var(--ctp-base);
-  opacity: 0.75;
 }
 
 .search-no-results {
