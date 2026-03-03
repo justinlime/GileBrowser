@@ -681,6 +681,7 @@ a:hover {
   text-align: center;
   padding: 0.3rem 0.75rem;
   font-size: 0.9rem;
+  list-style-type: none; /* Remove any default markers */
 }
 
 .info-row dd {
@@ -1221,7 +1222,6 @@ a:hover {
     color: var(--text-muted);
   }
   .col-mtime::before {
-    content: " · ";
     color: var(--border);
   }
 
