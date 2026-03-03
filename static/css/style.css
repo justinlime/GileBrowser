@@ -981,11 +981,18 @@ a:hover {
 }
 
 .rendered-preview pre .code-content {
+  background: var(--code-bg);   /* match parent <pre> background for consistent scrolling */
   padding: 1.2rem 1.5rem;
   overflow-x: auto;
   overflow-y: auto;          /* scroll lives here now */
   max-height: 60vh;          /* height cap lives here now */
 }
+
+/* Scrollbar styles for code blocks - match the code-bg background */
+.rendered-preview pre .code-content::-webkit-scrollbar-track {
+  background: var(--code-bg);
+}
+
 .rendered-preview pre .code-content code {
   background: none;
   border: none;
@@ -1328,8 +1335,14 @@ a:hover {
 
   /* rendered preview code-content on mobile */
   .rendered-preview pre .code-content {
-    max-height: 50vh;    /* tighter cap on small screens */
+    background: var(--code-bg);   /* match parent <pre> background for consistent scrolling */
+    max-height: 50vh;             /* tighter cap on small screens */
     padding: 0.75rem;
+  }
+
+  /* Scrollbar styles for code blocks on mobile - match the code-bg background */
+  .rendered-preview pre .code-content::-webkit-scrollbar-track {
+    background: var(--code-bg);
   }
 
   /* text preview - reduced padding */
