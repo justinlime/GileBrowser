@@ -1332,22 +1332,9 @@ a:hover {
     border-radius: calc(var(--radius) * 1.5);
   }
 
-  /* rendered preview code blocks on mobile - entire header is clickable */
+  /* rendered preview code blocks on mobile - hide empty header */
   .rendered-preview pre .code-header {
-    display: flex; /* Show header on mobile for clickable area */
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-    justify-content: flex-end;
-    background: var(--surface2);
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-  }
-  .rendered-preview pre .code-header:hover {
-    background: var(--accent-dim);
-  }
-  .rendered-preview pre .code-header:active {
-    background: var(--accent);
+    display: none; /* Hide empty header, copy button is still accessible */
   }
   .rendered-preview .copy-code-btn {
     position: absolute;
