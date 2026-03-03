@@ -803,9 +803,18 @@ a:hover {
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s, visibility 0.15s;
   box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  visibility: hidden;
 }
+
+/* Show copy button on hover */
+.text-preview:hover .copy-btn {
+  opacity: 1;
+  visibility: visible;
+}
+
 .text-preview .copy-btn:hover {
   background: var(--accent-dim);
   border-color: var(--accent);
@@ -942,9 +951,18 @@ a:hover {
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s, visibility 0.15s;
   box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  visibility: hidden;
 }
+
+/* Show copy button on hover */
+.rendered-preview pre:hover .copy-code-btn {
+  opacity: 1;
+  visibility: visible;
+}
+
 .rendered-preview .copy-code-btn:hover {
   background: var(--accent-dim);
   border-color: var(--accent);
@@ -1330,12 +1348,27 @@ a:hover {
     padding: 0.45rem 1rem;
     font-size: 0.95rem;
     border-radius: calc(var(--radius) * 1.5);
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  /* Show copy button on hover */
+  .text-preview:hover .copy-btn {
+    opacity: 1;
+    visibility: visible;
   }
 
   /* rendered preview code blocks on mobile - hide empty header */
   .rendered-preview pre .code-header {
     display: none; /* Hide empty header, copy button is still accessible */
   }
+
+  /* Show copy button on hover for code blocks */
+  .rendered-preview pre:hover .copy-code-btn {
+    opacity: 1;
+    visibility: visible;
+  }
+
   .rendered-preview .copy-code-btn {
     position: absolute;
     top: 0.4rem;
@@ -1349,13 +1382,17 @@ a:hover {
     color: var(--text);
     box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.15);
     width: auto;
+    opacity: 0;
+    visibility: hidden;
   }
-  .rendered-preview pre .code-header:hover .copy-code-btn {
+
+  .rendered-preview pre:hover .copy-code-btn:hover {
     background: var(--accent-dim);
     border-color: var(--accent);
     color: var(--text);
   }
-  .rendered-preview pre .code-header:active .copy-code-btn {
+
+  .rendered-preview pre:hover .copy-code-btn:active {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--ctp-base);
