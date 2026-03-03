@@ -352,8 +352,9 @@
         pre.classList.add("has-copy-btn");
 
         // Check if this is a Chroma-highlighted block or plain code
+        var chromaEl = pre.querySelector(".chroma");
         var codeEl = pre.querySelector("code");
-        if (!codeEl && !pre.querySelector(".chroma")) {
+        if (!codeEl && !chromaEl) {
           return; // No code to copy
         }
 
@@ -366,40 +367,9 @@
           codeContent.appendChild(pre.firstChild);
         }
 
-        // Create header with language label
+        // Create empty header for layout (no language label)
         var header = document.createElement("div");
         header.className = "code-header";
-
-        var langLabel = document.createElement("span");
-        langLabel.className = "code-lang";
-
-        // Try to detect language from Chroma classes
-        var chromaEl = pre.querySelector(".chroma");
-        if (chromaEl) {
-          // Look for language class like "language-python" or similar
-          var codeInChroma = chromaEl.querySelector("code");
-          if (codeInChroma) {
-            var langMatch = codeInChroma.className.match(/language-(\w+)/);
-            if (langMatch) {
-              langLabel.textContent = langMatch[1];
-            } else {
-              // Check parent classes
-              var classList = chromaEl.classList;
-              for (var i = 0; i < classList.length; i++) {
-                if (classList[i].startsWith("language-")) {
-                  langLabel.textContent = classList[i].replace("language-", "");
-                  break;
-                }
-              }
-            }
-          }
-        }
-
-        if (!langLabel.textContent) {
-          langLabel.textContent = "code";
-        }
-
-        header.appendChild(langLabel);
 
         // Prepend header and add content wrapper back to pre
         pre.insertBefore(header, pre.firstChild);
