@@ -752,35 +752,39 @@ a:hover {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: auto;
+  max-height: 70vh;
+  overflow-x: auto;
+  overflow-y: auto;
   box-shadow: var(--shadow);
   position: relative;
 }
 
-/* Copy button for full text preview */
+/* Copy button for full text preview - squircle design */
 .text-preview .copy-btn {
   position: absolute;
   top: 0.6rem;
-  right: 0.8rem;
+  right: 0.6rem;
   z-index: 10;
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.35rem 0.75rem;
-  font-size: 0.85rem;
-  font-weight: 500;
+  border-radius: calc(var(--radius) * 1.5);
+  padding: 0.55rem 1.2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
   color: var(--text);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.15);
 }
 .text-preview .copy-btn:hover {
   background: var(--accent-dim);
   border-color: var(--accent);
   color: var(--text);
+  box-shadow: 0 4px 12px -3px rgba(0, 0, 0, 0.2);
 }
 .text-preview .copy-btn:active {
   background: var(--accent);
+  border-color: var(--accent);
   color: var(--ctp-base);
 }
 .text-preview .copy-btn.copied {
@@ -884,6 +888,8 @@ a:hover {
   border-radius: var(--radius);
   padding: 0; /* removed to accommodate copy button header */
   overflow-x: auto;
+  max-height: 60vh;
+  overflow-y: auto;
   margin: 1.2rem 0;
   position: relative;
 }
@@ -893,34 +899,41 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 1rem;
+  padding: 0.65rem 1.2rem;
   background: var(--surface2);
   border-bottom: 1px solid var(--border);
   border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   color: var(--text-muted);
 }
 
-/* Copy button for code blocks */
+/* Copy button for code blocks - squircle design */
 .rendered-preview .copy-code-btn {
-  background: transparent;
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 10;
+  background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: calc(var(--radius) - 2px);
-  padding: 0.25rem 0.6rem;
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--text-muted);
+  border-radius: calc(var(--radius) * 1.5);
+  padding: 0.55rem 1.2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.15);
 }
 .rendered-preview .copy-code-btn:hover {
-  background: var(--surface2);
-  border-color: var(--accent-dim);
+  background: var(--accent-dim);
+  border-color: var(--accent);
   color: var(--text);
+  box-shadow: 0 4px 12px -3px rgba(0, 0, 0, 0.2);
 }
 .rendered-preview .copy-code-btn:active {
-  background: var(--accent-dim);
-  color: var(--text);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ctp-base);
 }
 .rendered-preview .copy-code-btn.copied {
   background: var(--success);
@@ -1266,7 +1279,12 @@ a:hover {
   .rendered-preview h3 { font-size: 1.1rem; }
   .rendered-preview h4 { font-size: 1rem; }
   .rendered-preview p { margin: 0.6rem 0; }
-  .rendered-preview pre { padding: 0.75rem; margin: 0.75rem 0; }
+  .rendered-preview pre {
+    padding: 0;
+    margin: 0.75rem 0;
+    display: flex;
+    flex-direction: column;
+  }
   .rendered-preview code { font-size: 0.8em; }
 
   /* text preview - reduced padding */
@@ -1276,21 +1294,66 @@ a:hover {
   .text-preview .chroma {
     font-size: 0.95rem;
   }
+  /* text preview copy button on mobile - squircle design */
   .text-preview .copy-btn {
     top: 0.4rem;
-    right: 0.5rem;
-    padding: 0.3rem 0.6rem;
-    font-size: 0.8rem;
+    right: 0.4rem;
+    padding: 0.45rem 1rem;
+    font-size: 0.95rem;
+    border-radius: calc(var(--radius) * 1.5);
   }
 
-  /* rendered preview code blocks on mobile */
+  /* rendered preview code blocks on mobile - entire header is clickable */
+  .rendered-preview pre {
+    max-height: 50vh;
+  }
   .rendered-preview pre .code-header {
-    padding: 0.4rem 0.75rem;
-    font-size: 0.78rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    justify-content: flex-end;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .rendered-preview pre .code-header:hover {
+    background: var(--accent-dim);
+  }
+  .rendered-preview pre .code-header:active {
+    background: var(--accent);
+  }
+  /* Hide language label on mobile, make button span full width */
+  .rendered-preview pre .code-header .code-lang {
+    display: none;
   }
   .rendered-preview .copy-code-btn {
-    padding: 0.2rem 0.5rem;
-    font-size: 0.72rem;
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    padding: 0.45rem 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: calc(var(--radius) * 1.5);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.15);
+    width: auto;
+  }
+  .rendered-preview pre .code-header:hover .copy-code-btn {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--text);
+  }
+  .rendered-preview pre .code-header:active .copy-code-btn {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--ctp-base);
+  }
+  .rendered-preview .copy-code-btn.copied {
+    background: var(--success) !important;
+    border-color: var(--success) !important;
+    color: var(--ctp-base) !important;
   }
   .rendered-preview pre .code-content {
     padding: 0.75rem;

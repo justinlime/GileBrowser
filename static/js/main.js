@@ -366,7 +366,7 @@
           codeContent.appendChild(pre.firstChild);
         }
 
-        // Create header with copy button
+        // Create header with language label
         var header = document.createElement("div");
         header.className = "code-header";
 
@@ -399,20 +399,20 @@
           langLabel.textContent = "code";
         }
 
-        var copyCodeBtn = document.createElement("button");
-        copyCodeBtn.className = "copy-code-btn";
-        copyCodeBtn.textContent = "Copy";
-        copyCodeBtn.type = "button";
-
         header.appendChild(langLabel);
-        header.appendChild(copyCodeBtn);
 
         // Prepend header and add content wrapper back to pre
         pre.insertBefore(header, pre.firstChild);
         pre.appendChild(codeContent);
 
-        // Handle click
-        copyCodeBtn.addEventListener("click", function () {
+        // Create copy button positioned absolutely in top-right of pre
+        var copyCodeBtn = document.createElement("button");
+        copyCodeBtn.className = "copy-code-btn";
+        copyCodeBtn.textContent = "Copy";
+        copyCodeBtn.type = "button";
+        pre.appendChild(copyCodeBtn);
+
+        function handleCopy() {
           var textToCopy;
 
           if (chromaEl) {
@@ -435,6 +435,17 @@
               copyCodeBtn.textContent = "Copy";
             }, 1500);
           });
+        }
+
+        // Handle click on button
+        copyCodeBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          handleCopy();
+        });
+
+        // On mobile, make entire header clickable
+        header.addEventListener("click", function () {
+          handleCopy();
         });
       });
     })();
