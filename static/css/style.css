@@ -748,15 +748,44 @@ a:hover {
 }
 
 /* ---- Chroma syntax highlighting -------------------------- */
+
+/*
+ * FIX: sticky copy button in text-preview
+ *
+ * Previously .text-preview was both the positioning context (position: relative)
+ * AND the scroll container (overflow: auto, max-height: 70vh). An absolutely
+ * positioned child inside a scroll container scrolls with the content — so the
+ * copy button disappeared as soon as the user scrolled down.
+ *
+ * Fix: remove max-height / overflow from .text-preview so it is no longer the
+ * scroll container. Move those properties to .text-preview .chroma (the inner
+ * content div) so only the code scrolls. The wrapper keeps position: relative
+ * so the absolutely positioned copy button stays anchored to the top-right of
+ * the non-scrolling outer box and is always visible.
+ */
 .text-preview {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  max-height: 70vh;
-  overflow-x: auto;
-  overflow-y: auto;
+  /* max-height and overflow intentionally removed — see note above */
   box-shadow: var(--shadow);
   position: relative;
+}
+
+/* Reset background on ALL .chroma descendants so highlight.css defaults don't bleed through */
+.text-preview .chroma {
+  background: var(--surface);
+}
+
+.text-preview > .chroma {
+  margin: 0;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  overflow-y: auto;       /* scroll lives here now */
+  max-height: 70vh;       /* height cap lives here now */
+  font-family: var(--font-mono);
+  font-size: 1.02rem;
+  line-height: 1.7;
 }
 
 /* Copy button for full text preview - squircle design */
@@ -791,16 +820,6 @@ a:hover {
   background: var(--success);
   border-color: var(--success);
   color: var(--ctp-base);
-}
-
-.text-preview .chroma {
-  margin: 0;
-  background: var(--surface);
-  border-radius: var(--radius);
-  overflow: auto;
-  font-family: var(--font-mono);
-  font-size: 1.02rem;
-  line-height: 1.7;
 }
 
 /* Chroma emits a <table> in line-number mode; make it fill the container */
@@ -881,15 +900,24 @@ a:hover {
   color: var(--ctp-peach);
 }
 
+/*
+ * FIX: sticky copy button in rendered code blocks
+ *
+ * Same root cause as .text-preview above. The <pre> was both position: relative
+ * (anchor for the absolute button) AND the scroll container (max-height + overflow).
+ * Moving the scroll/height cap to .code-content makes <pre> a static wrapper,
+ * so the absolutely-positioned .copy-code-btn stays locked to the top-right
+ * corner and remains visible throughout the scroll.
+ */
+
 /* fenced code blocks */
 .rendered-preview pre {
   background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 0; /* removed to accommodate copy button header */
-  overflow-x: auto;
-  max-height: 60vh;
-  overflow-y: auto;
+  padding: 0;
+  /* max-height and overflow intentionally removed — see note above */
+  overflow: visible;
   margin: 1.2rem 0;
   position: relative;
 }
@@ -944,6 +972,8 @@ a:hover {
 .rendered-preview pre .code-content {
   padding: 1.2rem 1.5rem;
   overflow-x: auto;
+  overflow-y: auto;          /* scroll lives here now */
+  max-height: 60vh;          /* height cap lives here now */
 }
 .rendered-preview pre .code-content code {
   background: none;
@@ -1282,18 +1312,25 @@ a:hover {
   .rendered-preview pre {
     padding: 0;
     margin: 0.75rem 0;
-    display: flex;
-    flex-direction: column;
+    /* overflow: visible is already set above; no change needed */
   }
   .rendered-preview code { font-size: 0.8em; }
 
-  /* text preview - reduced padding */
-  .text-preview {
+  /* rendered preview code-content on mobile */
+  .rendered-preview pre .code-content {
+    max-height: 50vh;    /* tighter cap on small screens */
     padding: 0.75rem;
   }
-  .text-preview .chroma {
+
+  /* text preview - reduced padding */
+  .text-preview {
+    padding: 0;          /* no padding on wrapper; chroma has its own scroll */
+  }
+  .text-preview > .chroma {
+    max-height: 60vh;    /* tighter cap on small screens */
     font-size: 0.95rem;
   }
+
   /* text preview copy button on mobile - squircle design */
   .text-preview .copy-btn {
     top: 0.4rem;
@@ -1304,9 +1341,6 @@ a:hover {
   }
 
   /* rendered preview code blocks on mobile - entire header is clickable */
-  .rendered-preview pre {
-    max-height: 50vh;
-  }
   .rendered-preview pre .code-header {
     padding: 0.5rem 1rem;
     font-size: 0.9rem;
@@ -1354,9 +1388,6 @@ a:hover {
     background: var(--success) !important;
     border-color: var(--success) !important;
     color: var(--ctp-base) !important;
-  }
-  .rendered-preview pre .code-content {
-    padding: 0.75rem;
   }
 
   /* image preview - smaller max height */
