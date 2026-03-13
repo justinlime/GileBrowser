@@ -1191,6 +1191,195 @@ a:hover {
   background: var(--accent);
 }
 
+/* ---- Image Lightbox -------------------------------------- */
+.image-lightbox-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+  cursor: default;
+}
+
+.image-lightbox-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.image-lightbox-overlay.zoomed {
+  cursor: grab;
+}
+
+.image-lightbox-overlay.zoomed:active {
+  cursor: grabbing;
+}
+
+/* Close button */
+.image-lightbox-close {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.5rem;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--danger);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  z-index: 1003;
+  outline: none;
+}
+
+.image-lightbox-close:hover {
+  background: var(--ctp-red);
+  color: var(--ctp-base);
+  transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(243, 139, 168, 0.5);
+}
+
+.image-lightbox-close:focus {
+  outline: none;
+}
+
+.image-lightbox-close svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+/* Image container */
+.image-lightbox-container {
+  position: relative;
+  width: calc(100vw - 4rem);
+  max-width: calc(100vw - 4rem);
+  height: auto;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-lightbox-wrapper {
+  position: relative;
+  display: inline-block;
+  transition: transform 0.15s ease-out;
+  transform-origin: center center;
+}
+
+.image-lightbox-image {
+  max-width: calc(100vw - 4rem);
+  width: calc(100vw - 4rem);
+  height: auto;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+.image-lightbox-image.zoomed {
+  cursor: grab;
+}
+
+.image-lightbox-image.zoomed:active {
+  cursor: grabbing;
+}
+
+/* Zoom controls */
+.image-lightbox-controls {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.5);
+  padding: 0.4rem 0.6rem;
+  z-index: 1002;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.image-lightbox-overlay:not(.zoomed) .image-lightbox-controls {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.image-lightbox-zoom-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius) * 1.5);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.image-lightbox-zoom-btn:hover {
+  background: var(--surface1);
+  transform: scale(1.1);
+}
+
+.image-lightbox-zoom-btn svg {
+  width: 24px;
+  height: 24px;
+  fill: var(--text);
+}
+
+.image-lightbox-zoom-level {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  min-width: 48px;
+  text-align: center;
+  padding: 0 0.5rem;
+}
+
+/* Image caption */
+.image-lightbox-caption {
+  position: absolute;
+  bottom: -3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  max-width: calc(100vw - 4rem);
+  overflow-wrap: break-word;
+}
+
+/* Make images clickable to open lightbox */
+.image-clickable {
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.image-clickable:hover {
+  opacity: 0.85;
+  transform: scale(1.02);
+}
+
+/* Prevent text selection during pan */
+.image-lightbox-overlay.active * {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 /* ---- Responsive ------------------------------------------ */
 @media (max-width: 640px) {
   /* container */
