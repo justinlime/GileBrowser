@@ -487,7 +487,7 @@ a:hover {
 }
 .file-table tbody tr {
   border-bottom: 1px solid var(--border);
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition: background-color 0.15s ease;
 }
 .file-table tbody tr:last-child {
   border-bottom: none;
@@ -495,13 +495,22 @@ a:hover {
 .file-table tbody tr:hover {
   background: color-mix(in srgb, var(--accent) 12%, var(--surface2));
   cursor: pointer;
-  transform: translateX(2px);
+}
+
+/* Remove outline from any interactive elements inside hovered rows */
+.file-table tbody tr:hover a,
+.file-table tbody tr:hover button,
+.file-table tbody tr:hover * {
+  outline: none;
 }
 
 .file-table td {
   padding: 0.72rem 1rem;
   vertical-align: middle;
+  border-style: none;
 }
+
+/* No individual cell borders — row hover effect handles visual separation */
 
 .col-name {
   width: 55%;
