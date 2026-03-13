@@ -111,7 +111,7 @@ func humanSize(n int64) string {
 		return fmt.Sprintf("%d B", n)
 	}
 	div, exp := int64(unit), 0
-	for n := n / unit; n >= unit; n /= unit {
+	for div*unit <= n {
 		div *= unit
 		exp++
 	}
@@ -128,7 +128,7 @@ func humanSizeShort(n int64) string {
 		return "< 1 KB"
 	}
 	div, exp := int64(unit), 0
-	for v := n / unit; v >= unit; v /= unit {
+	for div*unit <= n {
 		div *= unit
 		exp++
 	}

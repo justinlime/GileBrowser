@@ -295,20 +295,16 @@ func invalidateIndex() {
 //
 // This approach: one WalkDir visit per filesystem entry, total.
 //  1. Walk pass: for each regular file, add its size to its immediate parent
-//     directory's running total in a local map. Symlinks-to-directories are
-//     handled by calling the existing dirSize helper (which resolves the target
-//     and handles nested symlinks), recording the result under the symlink path,
-//     and marking it terminal so step 2 does not double-count it.
+//     directory's running total in a local map. Symlinks are skipped entirely
+//     (they contribute 0) to avoid following external links and double-counting.
 //  2. Propagation pass: sort all directory paths by length descending (a child
 //     path is always strictly longer than its parent's), then sweep once,
-//     adding each directory's subtotal to its parent. Terminal entries are
-//     skipped because their contribution was already applied in step 1.
+//     adding each directory's subtotal to its parent.
 //
 // Result: O(n) walk work, one goroutine, peak RAM proportional to the number
 // of directories (one int64 per directory in the local map).
 func buildSizeIndex(root string) map[string]int64 {
 	sizes := make(map[string]int64)
-	terminal := make(map[string]bool) // symlink-dirs: already applied to parent in step 1
 
 	// Seed the root so it always appears in the map even if empty.
 	sizes[root] = 0
@@ -326,31 +322,9 @@ func buildSizeIndex(root string) map[string]int64 {
 			return nil
 		}
 
-		// Symlink: WalkDir uses Lstat so it does not descend into symlinked
-		// directories automatically — we handle them explicitly here.
+		// Skip symlinks entirely — they contribute 0 to directory size.
+		// This avoids following external links and double-counting shared content.
 		if d.Type()&os.ModeSymlink != 0 {
-			resolved, err := filepath.EvalSymlinks(p)
-			if err != nil {
-				return nil
-			}
-			fi, err := os.Stat(resolved)
-			if err != nil {
-				return nil
-			}
-			parent := filepath.Dir(p)
-			if fi.IsDir() {
-				// Symlink to a directory: delegate to dirSize (which handles
-				// further nested symlinks), record the total under the symlink
-				// path so callers using that path get a cache hit, and mark it
-				// terminal so the propagation pass does not add it to the
-				// parent a second time.
-				sz := dirSize(resolved)
-				sizes[p] = sz
-				terminal[p] = true
-				sizes[parent] += sz
-			} else {
-				sizes[parent] += fi.Size()
-			}
 			return nil
 		}
 
@@ -372,9 +346,6 @@ func buildSizeIndex(root string) map[string]int64 {
 		return len(dirs[i]) > len(dirs[j])
 	})
 	for _, d := range dirs {
-		if terminal[d] {
-			continue // contribution already applied to parent during walk pass
-		}
 		parent := filepath.Dir(d)
 		if parent != d { // guard: filepath.Dir of a filesystem root returns itself
 			sizes[parent] += sizes[d]

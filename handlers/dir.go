@@ -27,61 +27,22 @@ func entryIsDir(parent string, d os.DirEntry) bool {
 
 // dirSize returns the total size in bytes of all files under root.
 // It is best-effort: unreadable entries are silently skipped.
-// Symlinks to directories are followed so their subtrees are included.
-// A visited set of real paths is maintained across recursive calls to detect
-// and break symlink cycles, preventing infinite recursion and stack overflow.
+// Symlinks are NOT followed — they contribute 0 to the size, which matches
+// user expectations for "how much space does this directory use" without
+// counting shared or external content multiple times.
 func dirSize(root string) int64 {
-	return dirSizeVisited(root, make(map[string]bool))
-}
-
-// dirSizeVisited is the cycle-safe implementation of dirSize.
-// visited tracks every real (EvalSymlinks-resolved) directory path that has
-// already been entered, so a symlink cycle does not cause infinite recursion.
-func dirSizeVisited(root string, visited map[string]bool) int64 {
-	// filepath.WalkDir uses os.Lstat semantics for every path it visits,
-	// including the root itself. If root is a symlink to a directory, WalkDir
-	// sees it as a symlink (not a dir) and never descends. Resolve the full
-	// symlink chain upfront so WalkDir always receives a real directory path.
-	resolved, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		// If the root cannot be resolved (broken symlink, permission error),
-		// return 0 rather than crashing.
-		return 0
-	}
-	root = resolved
-
-	// Guard against cycles: if we have already visited this real path, stop.
-	if visited[root] {
-		return 0
-	}
-	visited[root] = true
-
 	var total int64
 	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		// Real directory — descend normally, don't count its inode size.
-		if d.IsDir() {
+		// Skip symlinks entirely — they contribute 0 to directory size.
+		// This avoids following external links and double-counting shared content.
+		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
-		// Symlink encountered mid-walk: resolve and handle based on target type.
-		if d.Type()&os.ModeSymlink != 0 {
-			resolvedTarget, err := filepath.EvalSymlinks(p)
-			if err != nil {
-				return nil
-			}
-			fi, err := os.Stat(resolvedTarget)
-			if err != nil {
-				return nil
-			}
-			if fi.IsDir() {
-				// Symlink to a directory: recurse with the resolved real path,
-				// passing the shared visited set so cycles across any depth are caught.
-				total += dirSizeVisited(resolvedTarget, visited)
-			} else {
-				total += fi.Size()
-			}
+		// Real directory — descend normally, don't count its inode size.
+		if d.IsDir() {
 			return nil
 		}
 		// Regular file — count it.
