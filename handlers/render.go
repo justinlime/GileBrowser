@@ -42,6 +42,15 @@ func InitRenderOptions(theme string, previewImages bool) {
 	docPolicy = buildDocPolicy(previewImages)
 }
 
+// UpdateRenderOptions reconfigures the document renderer at runtime.
+// Call this when settings change via the web interface to update theme and
+// image policy without restarting the server.
+func UpdateRenderOptions() {
+	rtc := GetRuntimeConfig()
+	renderTheme = rtc.HighlightTheme
+	docPolicy = buildDocPolicy(rtc.PreviewImages)
+}
+
 // buildDocPolicy constructs the bluemonday allowlist policy used to sanitize
 // rendered Markdown and Org-mode output.
 //

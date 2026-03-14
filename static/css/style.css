@@ -279,6 +279,32 @@ a:hover {
   transform: scale(1.02);
 }
 
+/* Header navigation */
+.header-nav {
+  margin-left: auto;
+}
+
+.settings-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.8rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.settings-link:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ctp-base);
+  transform: translateY(-1px);
+}
+
 /* ---- Search ---------------------------------------------- */
 .search-wrap {
   position: relative;
@@ -1670,8 +1696,155 @@ a:hover {
     color: var(--ctp-base) !important;
   }
 
-  /* image preview - smaller max height */
-  .image-preview img {
-    max-height: 50vh;
+  	/* image preview - smaller max height */
+  	.image-preview img {
+          max-height: 50vh;
+      }
   }
-}
+  
+  /* ---- Settings page --------------------------------------- */
+  .settings-form h1 {
+  	font-size: 2rem;
+  	font-weight: 600;
+  	color: var(--header-fg);
+  	margin-bottom: 1.5rem;
+  	text-align: center;
+  }
+  
+  .form-group {
+  	background: var(--surface);
+  	border: 1px solid var(--border);
+  	border-radius: var(--radius);
+  	padding: 1.2rem;
+  	margin-bottom: 1rem;
+  }
+  
+  .form-group > label,
+  .checkbox-group > label {
+  	display: block;
+  	font-weight: 600;
+  	color: var(--text);
+  	margin-bottom: 0.5rem;
+  	font-size: 1rem;
+  }
+  
+  .form-group input[type="text"],
+  .form-group input[type="number"],
+  .form-group select {
+  	width: 100%;
+  	padding: 0.6rem 0.8rem;
+  	background: var(--surface2);
+  	border: 1px solid var(--border);
+  	border-radius: calc(var(--radius) / 2);
+  	color: var(--text);
+  	font-size: 1rem;
+  	outline: none;
+  	transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  
+  .form-group input[type="text"]:focus,
+  .form-group input[type="number"]:focus,
+  .form-group select:focus {
+  	border-color: var(--accent);
+  	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  
+  .help-text {
+  	display: block;
+  	margin-top: 0.4rem;
+  	font-size: 0.85rem;
+  	color: var(--text-muted);
+  }
+  
+  fieldset.form-group {
+  	border: none;
+  	padding: 0;
+  	margin: 0;
+  	background: transparent;
+  }
+  
+  fieldset.form-group legend {
+  	font-weight: 600;
+  	color: var(--header-fg);
+  	font-size: 1.1rem;
+  	margin-bottom: 0.8rem;
+  	display: block;
+  }
+  
+  .checkbox-group {
+  	display: flex;
+  	align-items: flex-start;
+  	gap: 0.6rem;
+  	padding: 0.6rem 0;
+  	flex-wrap: wrap;
+  }
+  
+  .checkbox-group input[type="checkbox"] {
+  	margin-top: 0.2rem;
+  	width: 18px;
+  	height: 18px;
+  	accent-color: var(--accent);
+  	cursor: pointer;
+  	flex-shrink: 0;
+  }
+  
+  .checkbox-group label {
+  	font-weight: 500;
+  	color: var(--text);
+  	cursor: pointer;
+  	margin-bottom: 0;
+  	font-size: 1rem;
+  }
+  
+  .form-actions {
+  	display: flex;
+  	gap: 0.8rem;
+  	justify-content: center;
+  	margin-top: 1.5rem;
+  	padding-top: 1rem;
+  	border-top: 1px solid var(--border);
+  }
+  
+  .success-message {
+  	background: color-mix(in srgb, var(--success) 20%, transparent);
+  	border: 1px solid var(--success);
+  	color: var(--success);
+  	padding: 1rem;
+  	border-radius: var(--radius);
+  	text-align: center;
+  	margin-bottom: 1rem;
+  	font-weight: 500;
+  }
+  
+  .error-message {
+  	background: color-mix(in srgb, var(--danger) 20%, transparent);
+  	border: 1px solid var(--danger);
+  	color: var(--danger);
+  	padding: 1rem;
+  	border-radius: var(--radius);
+  	text-align: center;
+  	margin-bottom: 1rem;
+  	font-weight: 500;
+  }
+  
+  @media (max-width: 640px) {
+  	.settings-form h1 {
+          font-size: 1.5rem;
+      }
+  
+  	.form-group {
+          padding: 1rem 0.8rem;
+      }
+  
+  	.checkbox-group {
+          flex-direction: column;
+      }
+  
+  	.form-actions {
+          flex-direction: column;
+      }
+  
+  	.form-actions .btn {
+          width: 100%;
+      }
+  }

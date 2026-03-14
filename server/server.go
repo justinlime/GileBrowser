@@ -34,29 +34,27 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 	// Build root map: name -> filesystem path
 	roots := make(map[string]string, len(cfg.Dirs))
 	for _, d := range cfg.Dirs {
-		name := rootName(d)
-		roots[name] = d
-	}
+        name := rootName(d)
+        roots[name] = d
+    }
+
+	// Initialize configuration database and load persisted settings.
+	// This must happen before any other handler initialization.
+	handlers.InitConfig(cfg.StatsDir)
+
+	// Load runtime config from database.
+	rtc := handlers.GetRuntimeConfig()
 
 	tmpl, err := LoadTemplates(templateFS)
 	if err != nil {
-		return fmt.Errorf("loading templates: %w", err)
-	}
+        return fmt.Errorf("loading templates: %w", err)
+    }
 
-	bwManager := handlers.NewBandwidthManager(cfg.BandwidthLimit)
-
-	previewOpts := handlers.PreviewOptions{
-		Images: cfg.PreviewImages,
-		Text:   cfg.PreviewText,
-		Docs:   cfg.PreviewDocs,
-	}
+	bwManager := handlers.NewBandwidthManager(rtc.BandwidthBps)
 
 	mux := http.NewServeMux()
-	registerRoutes(mux, roots, cfg.Theme, cfg.Title, cfg.FaviconPath, cfg.DefaultTheme, bwManager, previewOpts, tmpl)
-	wrappedMux := securityHeaders(mux, cfg.PreviewImages)
-
-	// Load persisted download statistics before any handler runs.
-	handlers.InitStats(cfg.StatsDir)
+	registerRoutes(mux, roots, rtc.HighlightTheme, rtc.Title, rtc.FaviconPath, rtc.DefaultTheme, bwManager, tmpl)
+	wrappedMux := securityHeaders(mux)
 
 	// Configure reverse-proxy IP forwarding before any request is served.
 	handlers.SetTrustedProxy(cfg.TrustedProxy)
@@ -64,9 +62,9 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 	// Configure the document renderer (Markdown/Org-mode) with the active
 	// Chroma theme and the preview-images setting. Must be called before
 	// any preview request is served.
-	handlers.InitRenderOptions(cfg.Theme, cfg.PreviewImages)
+	handlers.InitRenderOptions(rtc.HighlightTheme, rtc.PreviewImages)
 
-	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
+	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	logStartup(cfg, roots, addr)
 
 	// Warm the directory-size and search-index caches in the background so
@@ -105,33 +103,36 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 
 // logStartup prints a structured summary of the active configuration.
 func logStartup(cfg *config.Config, roots map[string]string, addr string) {
+	// Get runtime config for display values (from database).
+	rtc := handlers.GetRuntimeConfig()
+
 	sep := "-------------------------------------------"
 	log.Println(sep)
-	log.Printf("  %s", cfg.Title)
+	log.Printf("  %s", rtc.Title)
 	log.Println(sep)
 	log.Printf("  %-18s %s", "Address:", "http://"+addr)
 	log.Printf("  %-18s %d", "Port:", cfg.Port)
-	log.Printf("  %-18s %s", "Highlight theme:", cfg.Theme)
-	log.Printf("  %-18s %s", "Default UI theme:", cfg.DefaultTheme)
+	log.Printf("  %-18s %s", "Highlight theme:", rtc.HighlightTheme)
+	log.Printf("  %-18s %s", "Default UI theme:", rtc.DefaultTheme)
 
-	if cfg.FaviconPath != "" {
-		log.Printf("  %-18s %s", "Favicon:", cfg.FaviconPath)
-	} else {
-		log.Printf("  %-18s %s", "Favicon:", "(embedded default)")
-	}
+	if rtc.FaviconPath != "" {
+        log.Printf("  %-18s %s", "Favicon:", rtc.FaviconPath)
+    } else {
+        log.Printf("  %-18s %s", "Favicon:", "(embedded default)")
+    }
 
-	if cfg.BandwidthLimit > 0 {
-		log.Printf("  %-18s %s/s", "Bandwidth limit:", formatBandwidth(cfg.BandwidthLimit))
-	} else {
-		log.Printf("  %-18s %s", "Bandwidth limit:", "unlimited")
-	}
+	if rtc.BandwidthBps > 0 {
+        log.Printf("  %-18s %s/s", "Bandwidth limit:", formatBandwidth(rtc.BandwidthBps))
+    } else {
+        log.Printf("  %-18s %s", "Bandwidth limit:", "unlimited")
+    }
 
 	log.Printf("  %-18s images=%s  text=%s  docs=%s",
-		"Previews:",
-		enabledStr(cfg.PreviewImages),
-		enabledStr(cfg.PreviewText),
-		enabledStr(cfg.PreviewDocs),
-	)
+        "Previews:",
+        enabledStr(rtc.PreviewImages),
+        enabledStr(rtc.PreviewText),
+        enabledStr(rtc.PreviewDocs),
+    )
 
 	log.Printf("  %-18s %d director%s", "Serving:", len(roots), map[bool]string{true: "y", false: "ies"}[len(roots) == 1])
 	for name, fsPath := range roots {

@@ -14,8 +14,9 @@ import (
 
 // Templates wraps compiled per-page template sets.
 type Templates struct {
-	dir     *template.Template
-	preview *template.Template
+	dir       *template.Template
+	preview   *template.Template
+	settings  *template.Template
 }
 
 var tmplFuncs = template.FuncMap{
@@ -44,12 +45,17 @@ func LoadTemplates(tfs embed.FS) (*Templates, error) {
 		return nil, fmt.Errorf("parse directory template: %w", err)
 	}
 
-	prev, err := cloneAndParse(base, sub, "file-preview.html")
-	if err != nil {
-		return nil, fmt.Errorf("parse preview template: %w", err)
-	}
-
-	return &Templates{dir: dir, preview: prev}, nil
+		prev, err := cloneAndParse(base, sub, "file-preview.html")
+		if err != nil {
+	        return nil, fmt.Errorf("parse preview template: %w", err)
+	    }
+	
+		setts, err := cloneAndParse(base, sub, "settings.html")
+		if err != nil {
+	        return nil, fmt.Errorf("parse settings template: %w", err)
+	    }
+	
+		return &Templates{dir: dir, preview: prev, settings: setts}, nil
 }
 
 // loadTemplatesFromDisk loads templates directly from the filesystem.
@@ -65,12 +71,17 @@ func loadTemplatesFromDisk(dir string) (*Templates, error) {
 		return nil, fmt.Errorf("parse directory template: %w", err)
 	}
 
-	prevTmpl, err := cloneAndParseFiles(base, dir+"/file-preview.html")
-	if err != nil {
-		return nil, fmt.Errorf("parse preview template: %w", err)
-	}
-
-	return &Templates{dir: dirTmpl, preview: prevTmpl}, nil
+		prevTmpl, err := cloneAndParseFiles(base, dir+"/file-preview.html")
+		if err != nil {
+	        return nil, fmt.Errorf("parse preview template: %w", err)
+	    }
+	
+		settsTmpl, err := cloneAndParseFiles(base, dir+"/settings.html")
+		if err != nil {
+	        return nil, fmt.Errorf("parse settings template: %w", err)
+	    }
+	
+		return &Templates{dir: dirTmpl, preview: prevTmpl, settings: settsTmpl}, nil
 }
 
 // cloneAndParse clones a base template set and adds one more file from an fs.FS.
@@ -101,6 +112,12 @@ func (t *Templates) ExecuteDir(w http.ResponseWriter, data *models.DirListing) e
 func (t *Templates) ExecutePreview(w http.ResponseWriter, data *models.PreviewData) error {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return t.preview.ExecuteTemplate(w, "base", data)
+}
+
+// ExecuteSettings renders the settings page template.
+func (t *Templates) ExecuteSettings(w http.ResponseWriter, data interface{}) error {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	return t.settings.ExecuteTemplate(w, "base", data)
 }
 
 // humanSize formats a byte count into a human-readable string using SI

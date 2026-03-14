@@ -32,20 +32,21 @@ import (
 //   - Referrer-Policy: suppresses the Referer header on outbound navigations
 //     so internal file paths are not leaked to external sites linked from
 //     previewed documents.
-func securityHeaders(h http.Handler, previewImages bool) http.Handler {
-	imgSrc := "img-src 'self' data:;"
-	if previewImages {
-		imgSrc = "img-src 'self' data: https:;"
-	}
-	csp := "default-src 'self'; " +
-		"script-src 'self' 'unsafe-inline'; " +
-		"style-src 'self' 'unsafe-inline'; " +
-		imgSrc + " " +
-		"font-src 'self'; " +
-		"frame-src 'self'; " +
-		"object-src 'none';"
-
+func securityHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rtc := handlers.GetRuntimeConfig()
+		imgSrc := "img-src 'self' data:;"
+		if rtc.PreviewImages {
+			imgSrc = "img-src 'self' data: https:;"
+		}
+		csp := "default-src 'self'; " +
+			"script-src 'self' 'unsafe-inline'; " +
+			"style-src 'self' 'unsafe-inline'; " +
+			imgSrc + " " +
+			"font-src 'self'; " +
+			"frame-src 'self'; " +
+			"object-src 'none';"
+
 		w.Header().Set("Content-Security-Policy", csp)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
@@ -57,7 +58,7 @@ func securityHeaders(h http.Handler, previewImages bool) http.Handler {
 // registerRoutes attaches all handlers to the given mux and wraps the entire
 // mux in the security-headers middleware so every response carries the
 // defensive headers regardless of which route matched.
-func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, faviconPath, defaultTheme string, bw *handlers.BandwidthManager, previewOpts handlers.PreviewOptions, tmpl *Templates) {
+func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, faviconPath, defaultTheme string, bw *handlers.BandwidthManager, tmpl *Templates) {
 	// Static assets
 	mux.Handle("/static/", http.StripPrefix("/static/", staticHandler()))
 
@@ -80,11 +81,14 @@ func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, f
 	// Inline file serving for previews (bandwidth-limited, not counted in stats)
 	mux.Handle("/view/", bw.Wrap(http.StripPrefix("/view", handlers.ViewHandler(roots))))
 
-	// Chroma syntax-highlighting stylesheet (generated once at startup)
-	mux.HandleFunc("/highlight.css", handlers.HighlightCSSHandler(theme))
+	// Chroma syntax-highlighting stylesheet (read from runtime config)
+	mux.HandleFunc("/highlight.css", handlers.HighlightCSSHandler())
 
 	// File previews
-	mux.HandleFunc("/preview/", handlers.PreviewHandler(roots, theme, title, defaultTheme, previewOpts, tmpl))
+	mux.HandleFunc("/preview/", handlers.PreviewHandler(roots, title, defaultTheme, tmpl))
+
+	// Settings page
+	mux.HandleFunc("/settings", handlers.SettingsHandler(tmpl))
 
 	// Directory / root listing (catch-all)
 	mux.HandleFunc("/", routeRoot(roots, title, defaultTheme, tmpl))

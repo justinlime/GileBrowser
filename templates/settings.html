@@ -1,0 +1,73 @@
+{{define "content"}}
+<nav class="breadcrumbs" aria-label="breadcrumb">
+  <a class="crumb" href="/">{{.SiteName}}</a>
+  <span class="sep">/</span>
+  <span class="crumb current">Settings</span>
+</nav>
+
+<h1>Server Settings</h1>
+
+<form method="POST" action="/settings" class="settings-form">
+  <div class="form-group">
+    <label for="title">Site Title</label>
+    <input type="text" id="title" name="title" value="{{.Settings.Title}}" required placeholder="GileBrowser">
+    <span class="help-text">Display name shown in the browser title and header.</span>
+  </div>
+
+  <div class="form-group">
+    <label for="default_theme">Default Theme</label>
+    <select id="default_theme" name="default_theme">
+      <option value="dark" {{if eq .Settings.DefaultTheme "dark"}}selected{{end}}>Dark</option>
+      <option value="light" {{if eq .Settings.DefaultTheme "light"}}selected{{end}}>Light</option>
+    </select>
+    <span class="help-text">Default color scheme for new visitors.</span>
+  </div>
+
+  <fieldset class="form-group">
+    <legend>Preview Options</legend>
+    
+    <div class="checkbox-group">
+      <input type="checkbox" id="preview_images" name="preview_images" {{if .Settings.PreviewImages}}checked{{end}}>
+      <label for="preview_images">Enable Image Previews</label>
+      <span class="help-text">Display images inline in the browser.</span>
+    </div>
+
+    <div class="checkbox-group">
+      <input type="checkbox" id="preview_text" name="preview_text" {{if .Settings.PreviewText}}checked{{end}}>
+      <label for="preview_text">Enable Text/Code Previews</label>
+      <span class="help-text">Show syntax-highlighted text and code files.</span>
+    </div>
+
+    <div class="checkbox-group">
+      <input type="checkbox" id="preview_docs" name="preview_docs" {{if .Settings.PreviewDocs}}checked{{end}}>
+      <label for="preview_docs">Enable Document Previews</label>
+      <span class="help-text">Render Markdown, Org-mode, and HTML files as rich documents.</span>
+    </div>
+  </fieldset>
+
+  <div class="form-group">
+    <label for="bandwidth_bps">Bandwidth Limit (optional)</label>
+    <input type="text" id="bandwidth_bps" name="bandwidth_bps" value="{{.Settings.BandwidthString}}" placeholder="e.g. 10mbps, 500kbps, 1gbps">
+    <span class="help-text">Maximum upload bandwidth. Leave empty for unlimited.</span>
+  </div>
+
+  <div class="form-group">
+    <label for="favicon_path">Custom Favicon Path (optional)</label>
+    <input type="text" id="favicon_path" name="favicon_path" value="{{.Settings.FaviconPath}}" placeholder="/path/to/favicon.ico">
+    <span class="help-text">Path to a custom favicon file. Leave empty for default.</span>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+    <a href="/" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+
+{{if .SuccessMessage}}
+<div class="success-message">{{.SuccessMessage}}</div>
+{{end}}
+
+{{if .ErrorMessage}}
+<div class="error-message">{{.ErrorMessage}}</div>
+{{end}}
+{{end}}

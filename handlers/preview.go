@@ -17,20 +17,13 @@ import (
 	"gileserver/models"
 )
 
-// PreviewOptions controls which preview types the server will render.
-// All fields default to true (previews enabled); set a field to false to
-// disable that preview type and fall back to the binary info-card instead.
-type PreviewOptions struct {
-	Images bool // render image files inline
-	Text   bool // syntax-highlight text/code files
-	Docs   bool // render Markdown, Org-mode, and HTML as rich documents
-}
-
 // PreviewHandler serves an inline preview page for any path — directory,
 // image, text, or binary/unknown.  All cases are handled here; nothing
 // redirects to a download anymore.
-func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme string, opts PreviewOptions, tmpl interface{ ExecutePreview(http.ResponseWriter, *models.PreviewData) error }) http.HandlerFunc {
+func PreviewHandler(roots map[string]string, siteName, defaultTheme string, tmpl interface{ ExecutePreview(http.ResponseWriter, *models.PreviewData) error }) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		rtc := GetRuntimeConfig()
+
 		urlPath := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/preview"))
 
 		fsPath, err := resolvePath(roots, urlPath)
@@ -72,11 +65,11 @@ func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme strin
 			pd.ViewURL = "/view" + urlPath
 
 			switch {
-			case isImage(mime) && opts.Images:
+			case isImage(mime) && rtc.PreviewImages:
 				// Inline image preview enabled.
 				pd.IsImage = true
 
-			case isText(mime) && opts.Text:
+			case isText(mime) && rtc.PreviewText:
 				// Syntax-highlighted (and optionally rendered) text preview enabled.
 				pd.IsText = true
 				content, err := readTextFile(fsPath)
@@ -85,16 +78,16 @@ func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme strin
 					return
 				}
 				// Always populate the highlighted fallback first.
-				highlighted, err := highlightContent(content, filepath.Base(fsPath), theme)
+				highlighted, err := highlightContent(content, filepath.Base(fsPath), rtc.HighlightTheme)
 				if err != nil {
 					highlighted = template.HTML("<pre class=\"chroma\"><code>" +
 						template.HTMLEscapeString(content) + "</code></pre>")
 				}
 				pd.HighlightedContent = highlighted
 				// Attempt a rich render only when document previews are also enabled.
-				if opts.Docs && isRenderable(mime) {
+				if rtc.PreviewDocs && isRenderable(mime) {
 					docURLDir := path.Dir(urlPath)
-					if rendered, err := renderContent(content, mime, docURLDir, opts.Images); err == nil {
+					if rendered, err := renderContent(content, mime, docURLDir, rtc.PreviewImages); err == nil {
 						pd.RenderedContent = rendered
 						pd.IsRendered = true
 					}
@@ -114,22 +107,21 @@ func PreviewHandler(roots map[string]string, theme, siteName, defaultTheme strin
 }
 
 // HighlightCSSHandler serves the Chroma CSS stylesheet for the configured theme.
-// The CSS is generated once at startup and cached in memory.
-func HighlightCSSHandler(theme string) http.HandlerFunc {
-	style := styles.Get(theme)
-	if style == nil {
-		style = styles.Fallback
-	}
-	formatter := chromahtml.New(chromahtml.WithClasses(true))
-	var buf bytes.Buffer
-	if err := formatter.WriteCSS(&buf, style); err != nil {
-		buf.Reset()
-	}
-	css := buf.Bytes()
-
+// The theme is read from runtime config on each request, so changes apply immediately.
+func HighlightCSSHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		rtc := GetRuntimeConfig()
+		style := styles.Get(rtc.HighlightTheme)
+		if style == nil {
+			style = styles.Fallback
+		}
+		formatter := chromahtml.New(chromahtml.WithClasses(true))
+		var buf bytes.Buffer
+		if err := formatter.WriteCSS(&buf, style); err != nil {
+			buf.Reset()
+		}
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		w.Write(css)
+		w.Write(buf.Bytes())
 	}
 }
 

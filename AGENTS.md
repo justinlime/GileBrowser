@@ -98,11 +98,15 @@ Gilebrowser/
 ├── main.go            # Entry point; embeds templates/static, loads config, starts server
 │
 ├── config/
-│   └── config.go      # Configuration parsing (CLI flags + ENV vars), validation
+│   └── config.go      # Minimal CLI config (port, host, dirs); all other settings in web UI
+│
+├── db/
+│   └── db.go          # SQLite database for persistent download statistics storage
 │
 ├── handlers/
 │   ├── bandwidth.go   # Server-wide upload rate limiter with per-IP fair sharing
 │   ├── cache.go       # Directory-size and search-index caches with background refresh
+│   ├── config.go      # Unified configuration API; loads settings from DB, tracks stats
 │   ├── dir.go         # Directory listing handler, root listing, breadcrumbs
 │   ├── favicon.go     # Custom or embedded default favicon serving
 │   ├── file.go        # File download handler, inline view handler, search index builder
@@ -110,7 +114,7 @@ Gilebrowser/
 │   ├── preview.go     # File preview page (images, syntax-highlighted text, binary info)
 │   ├── render.go      # Markdown/Org-mode/HTML document rendering with sanitization
 │   ├── resolve.go     # URL-to-filesystem path resolver with traversal protection
-│   ├── stats.go       # Persistent download statistics (count and bytes)
+│   ├── settings.go    # Web-based settings page handler for runtime configuration
 │   ├── watcher.go     # Filesystem watcher for cache invalidation on changes
 │   └── zip.go         # Directory ZIP streaming with pre-calculated Content-Length
 │
@@ -122,6 +126,9 @@ Gilebrowser/
 │   ├── routes.go      # HTTP route registration and security headers middleware
 │   ├── server.go      # Server startup, configuration logging, cache warming
 │   └── templates.go   # Template loading, execution, and helper functions
+│
+├── settings/
+│   └── settings.go    # SQLite-based persistent configuration storage for all server settings
 │
 ├── static/
 │   ├── css/
@@ -137,24 +144,19 @@ Gilebrowser/
 └── templates/
     ├── base.html              # Base layout with header, footer, CSS/JS includes
     ├── directory.html         # Directory listing template with breadcrumb nav
-    └── file-preview.html      # File preview template (image/text/binary/dir views)
+    ├── file-preview.html      # File preview template (image/text/binary/dir views)
+    └── settings.html          # Server configuration form for web-based settings management
 ```
 
-### Change Log
 
-| Date | Action | File(s) | Description |
-|------|--------|---------|-------------|
-| Initial | Create | `AGENTS.md` | Project guidelines document |
-
----
-
-## Quick Reference for LLMs
+## Guidelines
 
 When working on this project, always:
 1. Read relevant source files before making changes
 2. Check this AGENTS.md for context and constraints
 3. Consider security implications of any code you write
 4. Keep comments brief but descriptive for future LLM reviewers
-5. Test in `/tmp` only
-6. Update directory structure section **only** when adding/removing project files (include brief function description per file)
+5. Test in `/tmp` only; DO NOT POLLUTE THE REPO WITH TEST OR TEMP FILES
+6. When adding a new file, you are required to update the directory tree that is in the AGENTS.md file 
 7. Do not modify AGENTS.md unless updating directory structure or explicitly asked by the user
+8. Do not under any circumstances run rm -rf. If a file should be deleted outside of /tmp, tell the user and they will do it.
