@@ -39,3 +39,10 @@ func resolvePath(roots map[string]string, urlPath string) (string, error) {
 
 	return cleanPath, nil
 }
+
+// ResolvePathDynamic resolves a URL path using the current dynamic roots map.
+// Use this when you want directory changes to take effect without restart.
+func ResolvePathDynamic(urlPath string) (string, error) {
+	roots := GetCurrentRootsMap()
+	return resolvePath(roots, urlPath)
+}

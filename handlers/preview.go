@@ -20,13 +20,13 @@ import (
 // PreviewHandler serves an inline preview page for any path — directory,
 // image, text, or binary/unknown.  All cases are handled here; nothing
 // redirects to a download anymore.
-func PreviewHandler(roots map[string]string, siteName, defaultTheme string, tmpl interface{ ExecutePreview(http.ResponseWriter, *models.PreviewData) error }) http.HandlerFunc {
+func PreviewHandler(siteName, defaultTheme string, tmpl interface{ ExecutePreview(http.ResponseWriter, *models.PreviewData) error }) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rtc := GetRuntimeConfig()
 
 		urlPath := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/preview"))
 
-		fsPath, err := resolvePath(roots, urlPath)
+		fsPath, err := ResolvePathDynamic(urlPath)
 		if err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return

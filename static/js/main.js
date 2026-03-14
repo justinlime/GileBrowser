@@ -796,8 +796,38 @@
   var settingsForm = document.querySelector(".settings-form");
   if (!settingsForm) return;
 
+  // Track pending directory additions and deletions (set by directory management code)
+  window.pendingDirAdditions = window.pendingDirAdditions || [];
+  window.pendingDirDeletions = window.pendingDirDeletions || [];
+  window.deletedDirsInput = document.getElementById("deleted-dirs");
+
   settingsForm.addEventListener("submit", function (e) {
     e.preventDefault();
+
+    // Prepare directory changes before creating FormData
+    if (window.pendingDirAdditions && window.pendingDirAdditions.length > 0) {
+      // Add hidden fields for new directories
+      window.pendingDirAdditions.forEach(function(dir, idx) {
+        var nameField = document.createElement("input");
+        nameField.type = "hidden";
+        nameField.name = "new_dir_name_" + idx;
+        nameField.value = dir.name;
+        settingsForm.appendChild(nameField);
+        
+        var pathField = document.createElement("input");
+        pathField.type = "hidden";
+        pathField.name = "new_dir_path_" + idx;
+        pathField.value = dir.path;
+        settingsForm.appendChild(pathField);
+      });
+    }
+    
+    // Set deleted directories hidden field
+    if (window.deletedDirsInput && window.pendingDirDeletions && window.pendingDirDeletions.length > 0) {
+      window.deletedDirsInput.value = window.pendingDirDeletions.join(",");
+    } else if (window.deletedDirsInput) {
+      window.deletedDirsInput.value = "";
+    }
 
     var formData = new FormData(settingsForm);
 
@@ -812,6 +842,8 @@
         if (data.success) {
           // Show toast notification
           window.showToast(data.message, 3000);
+          // Reload page to reflect changes
+          setTimeout(function() { window.location.reload(); }, 500);
         } else {
           alert("Failed to save settings: " + (data.error || "Unknown error"));
         }
@@ -913,3 +945,204 @@
 function log(msg) {
   console.log("[Settings]", msg);
 }
+
+// ------------------------------------------------------------------ //
+// Root Directory Management                                          //
+// ------------------------------------------------------------------ //
+
+(function () {
+  "use strict";
+
+  var addDirBtn = document.getElementById("add-dir-btn");
+  var newDirName = document.getElementById("new-dir-name");
+  var newDirPath = document.getElementById("new-dir-path");
+  var dirsTable = document.getElementById("root-directories-list");
+  var newDirsContainer = document.getElementById("new-directories-container");
+
+  // Use global variables accessible to the settings form submit handler
+  window.pendingDirAdditions = [];
+  window.pendingDirDeletions = [];
+
+  if (!addDirBtn || !newDirPath) return;
+
+  // Add a new directory to the pending list (not saved yet)
+  function addDirectory() {
+    var name = newDirName.value.trim();
+    var path = newDirPath.value.trim();
+    
+    if (!name) {
+      showToast("Please enter a directory name", 2000);
+      return;
+    }
+    if (!path) {
+      showToast("Please enter a directory path", 2000);
+      return;
+    }
+
+    // Convert name to URL-safe format
+    var safeName = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    if (!safeName) {
+      showToast("Invalid directory name", 2000);
+      return;
+    }
+
+    // Check for duplicate name in existing or pending directories
+    var allDirs = getAllDirectories();
+    for (var i = 0; i < allDirs.length; i++) {
+      if (allDirs[i].name === safeName && allDirs[i].path !== path) {
+        showToast("Directory name \"" + safeName + "\" already exists", 2000);
+        return;
+      }
+    }
+
+    // Add to pending additions
+    window.pendingDirAdditions.push({ name: safeName, path: path });
+    
+    // Clear inputs
+    newDirName.value = "";
+    newDirPath.value = "";
+    
+    // Update UI
+    renderNewDirectories();
+  }
+
+  // Get all directories (existing + pending additions - pending deletions)
+  function getAllDirectories() {
+    var all = [];
+    
+    // Add existing directories not marked for deletion
+    if (dirsTable) {
+      var rows = dirsTable.querySelectorAll("tbody tr");
+      rows.forEach(function(row) {
+        var name = row.getAttribute("data-name");
+        var isDeleted = window.pendingDirDeletions.indexOf(name) !== -1;
+        if (!isDeleted) {
+          var nameInput = row.querySelector(".dir-name-input");
+          var displayName = nameInput ? nameInput.value : name;
+          var pathCell = row.cells[1];
+          var path = pathCell ? pathCell.textContent.trim() : "";
+          all.push({ name: displayName, path: path, existing: true, originalName: name });
+        }
+      });
+    }
+    
+    // Add pending additions
+    window.pendingDirAdditions.forEach(function(dir) {
+      all.push({ name: dir.name, path: dir.path, existing: false });
+    });
+    
+    return all;
+  }
+
+  // Render the new directories container (pending additions)
+  function renderNewDirectories() {
+    if (!newDirsContainer) return;
+    
+    newDirsContainer.innerHTML = "";
+    
+    if (window.pendingDirAdditions.length === 0) return;
+    
+    var ul = document.createElement("ul");
+    ul.className = "pending-additions-list";
+    
+    window.pendingDirAdditions.forEach(function(dir, idx) {
+      var li = document.createElement("li");
+      li.className = "pending-addition-item";
+      
+      var nameSpan = document.createElement("span");
+      nameSpan.className = "pending-name";
+      nameSpan.innerHTML = "<code>" + escapeHtml(dir.name) + "</code>: ";
+      li.appendChild(nameSpan);
+      
+      var pathSpan = document.createElement("span");
+      pathSpan.className = "pending-path";
+      pathSpan.textContent = dir.path;
+      li.appendChild(pathSpan);
+      
+      var removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn btn-sm btn-danger";
+      removeBtn.innerHTML = "✕";
+      removeBtn.title = "Remove from pending additions";
+      removeBtn.onclick = function() {
+        window.pendingDirAdditions.splice(idx, 1);
+        renderNewDirectories();
+      };
+      li.appendChild(removeBtn);
+      
+      ul.appendChild(li);
+    });
+    
+    newDirsContainer.appendChild(ul);
+  }
+
+  // Remove a directory (mark for deletion)
+  function removeDirectory(originalName) {
+    // Check if this is a pending addition
+    var addIdx = -1;
+    for (var i = 0; i < window.pendingDirAdditions.length; i++) {
+      if (window.pendingDirAdditions[i].name === originalName) {
+        addIdx = i;
+        break;
+      }
+    }
+    
+    if (addIdx >= 0) {
+      // Remove from pending additions
+      window.pendingDirAdditions.splice(addIdx, 1);
+      renderNewDirectories();
+    } else {
+      // Mark existing directory for deletion
+      if (window.pendingDirDeletions.indexOf(originalName) === -1) {
+        window.pendingDirDeletions.push(originalName);
+      }
+      
+      // Update UI to show as deleted
+      var rows = dirsTable.querySelectorAll("tbody tr");
+      rows.forEach(function(row) {
+        if (row.getAttribute("data-name") === originalName) {
+          row.classList.add("deleted-row");
+        }
+      });
+    }
+  }
+
+  // Escape HTML to prevent XSS
+  function escapeHtml(text) {
+    var div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Event: Add directory button click
+  addDirBtn.addEventListener("click", addDirectory);
+
+  // Event: Enter key in inputs
+  newDirName.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      newDirPath.focus();
+    }
+  });
+  
+  newDirPath.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      addDirectory();
+    }
+  });
+
+  // Attach remove button listeners to existing rows
+  if (dirsTable) {
+    var attachRemoveListeners = function() {
+      var removeBtns = dirsTable.querySelectorAll(".remove-dir-btn");
+      removeBtns.forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          var name = this.getAttribute("data-name");
+          if (name) {
+            removeDirectory(name);
+          }
+        });
+      });
+    };
+    attachRemoveListeners();
+  }
+})();

@@ -16,11 +16,14 @@ import (
 //
 // It returns immediately; all watch processing runs in a background goroutine.
 // The returned stop function closes the watcher and terminates the goroutine.
-func StartWatcher(roots map[string]string) (stop func(), err error) {
+func StartWatcher() (stop func(), err error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
+
+	// Get current roots dynamically
+	roots := GetCurrentRootsMap()
 
 	// Watch every existing directory under every root recursively.
 	for _, fsRoot := range roots {

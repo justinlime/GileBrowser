@@ -68,7 +68,7 @@ const (
 // ZipHandler streams a directory as a ZIP archive.
 // When the URL resolves to the server root ("/"), all configured root
 // directories are bundled together into a single archive named after siteName.
-func ZipHandler(roots map[string]string, siteName string) http.HandlerFunc {
+func ZipHandler(siteName string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Strip leading /zip to get the directory URL path.
 		urlPath := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/zip"))
@@ -79,6 +79,7 @@ func ZipHandler(roots map[string]string, siteName string) http.HandlerFunc {
 		if urlPath == "/" {
 			log.Printf("zip  download   ip=%-15s  dir=/ (all roots)", ip)
 			start := time.Now()
+			roots := GetCurrentRootsMap()
 			n := zipAll(w, roots, siteName)
 			if n > 0 {
 				RecordDownload(n)
@@ -88,7 +89,7 @@ func ZipHandler(roots map[string]string, siteName string) http.HandlerFunc {
 			return
 		}
 
-		fsPath, err := resolvePath(roots, urlPath)
+		fsPath, err := ResolvePathDynamic(urlPath)
 		if err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return

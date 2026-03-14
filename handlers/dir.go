@@ -56,11 +56,11 @@ func dirSize(root string) int64 {
 
 // DirHandler handles directory listing requests.
 // roots maps the URL top-level name to the real filesystem path.
-func DirHandler(roots map[string]string, siteName, defaultTheme string, tmpl interface{ ExecuteDir(http.ResponseWriter, *models.DirListing) error }) http.HandlerFunc {
+func DirHandler(siteName, defaultTheme string, tmpl interface{ ExecuteDir(http.ResponseWriter, *models.DirListing) error }) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		urlPath := path.Clean("/" + r.URL.Path)
 
-		fsPath, err := resolvePath(roots, urlPath)
+		fsPath, err := ResolvePathDynamic(urlPath)
 		if err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -72,7 +72,7 @@ func DirHandler(roots map[string]string, siteName, defaultTheme string, tmpl int
 			return
 		}
 
-		entries, err := buildEntries(roots, urlPath, fsPath)
+		entries, err := buildEntries(urlPath, fsPath)
 		if err != nil {
 			http.Error(w, "Error reading directory", http.StatusInternalServerError)
 			return
@@ -96,12 +96,15 @@ func DirHandler(roots map[string]string, siteName, defaultTheme string, tmpl int
 }
 
 // RootHandler returns a handler for the "/" path that lists all configured roots.
-func RootHandler(roots map[string]string, siteName, defaultTheme string, tmpl interface{ ExecuteDir(http.ResponseWriter, *models.DirListing) error }) http.HandlerFunc {
+func RootHandler(siteName, defaultTheme string, tmpl interface{ ExecuteDir(http.ResponseWriter, *models.DirListing) error }) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" && r.URL.Path != "" {
 			http.NotFound(w, r)
 			return
 		}
+
+		// Get current roots dynamically
+		roots := GetCurrentRootsMap()
 
 		var entries []models.FileEntry
 		names := make([]string, 0, len(roots))
@@ -148,7 +151,7 @@ func RootHandler(roots map[string]string, siteName, defaultTheme string, tmpl in
 // buildEntries reads a directory and returns sorted FileEntry values.
 // Directory sizes are computed concurrently and served from a short-lived cache
 // so that listings with many subdirectories don't block on serial tree walks.
-func buildEntries(roots map[string]string, urlPath, fsPath string) ([]models.FileEntry, error) {
+func buildEntries(urlPath, fsPath string) ([]models.FileEntry, error) {
 	rawEntries, err := os.ReadDir(fsPath)
 	if err != nil {
 		return nil, err

@@ -16,11 +16,11 @@ import (
 // FileHandler serves a raw file download (with proper Content-Type and
 // Content-Length headers so the browser can show download progress).
 // Every completed request is recorded in the download statistics.
-func FileHandler(roots map[string]string) http.HandlerFunc {
+func FileHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		urlPath := path.Clean("/" + r.URL.Path)
 
-		fsPath, err := resolvePath(roots, urlPath)
+		fsPath, err := ResolvePathDynamic(urlPath)
 		if err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -60,11 +60,11 @@ func FileHandler(roots map[string]string) http.HandlerFunc {
 // ViewHandler serves a file inline — no Content-Disposition: attachment header
 // and no stats recording.  Used by PreviewHandler to display images within the
 // page without counting them as user-initiated downloads.
-func ViewHandler(roots map[string]string) http.HandlerFunc {
+func ViewHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		urlPath := path.Clean("/" + r.URL.Path)
 
-		fsPath, err := resolvePath(roots, urlPath)
+		fsPath, err := ResolvePathDynamic(urlPath)
 		if err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -107,8 +107,10 @@ func formatSize(b int64) string {
 // that repeated search requests never trigger a synchronous full tree walk.
 // The cached value is pre-serialised JSON bytes; no per-request encoding or
 // intermediate buffer allocation is needed.
-func IndexHandler(roots map[string]string) http.HandlerFunc {
+func IndexHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get current roots dynamically
+		roots := GetCurrentRootsMap()
 		data := cachedIndexGzip(roots)
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Encoding", "gzip")

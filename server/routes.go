@@ -58,7 +58,7 @@ func securityHeaders(h http.Handler) http.Handler {
 // registerRoutes attaches all handlers to the given mux and wraps the entire
 // mux in the security-headers middleware so every response carries the
 // defensive headers regardless of which route matched.
-func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, faviconPath, defaultTheme string, bw *handlers.BandwidthManager, tmpl *Templates) {
+func registerRoutes(mux *http.ServeMux, theme, title, faviconPath, defaultTheme string, bw *handlers.BandwidthManager, tmpl *Templates) {
 	dataDir := handlers.GetDataDir()
 
 	// Static assets
@@ -75,35 +75,40 @@ func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, f
 	mux.HandleFunc("/settings/favicon/upload", handlers.FaviconUploadHandler(dataDir))
 	mux.HandleFunc("/settings/favicon/delete", handlers.FaviconDeleteHandler())
 
-	// Search index (JSON)
-	mux.HandleFunc("/api/index", handlers.IndexHandler(roots))
+	// Directory management API
+	mux.HandleFunc("/api/dirs", handlers.ListDirsHandler())
+	mux.HandleFunc("/api/dirs/add", handlers.AddDirHandler())
+	mux.HandleFunc("/api/dirs/remove", handlers.RemoveDirHandler())
 
-	// ZIP download for directories (bandwidth-limited)
-	mux.Handle("/zip/", bw.Wrap(handlers.ZipHandler(roots, title)))
+	// Search index (JSON) - reads roots dynamically
+	mux.HandleFunc("/api/index", handlers.IndexHandler())
 
-	// File downloads (bandwidth-limited, counted in stats)
-	mux.Handle("/download/", bw.Wrap(http.StripPrefix("/download", handlers.FileHandler(roots))))
+	// ZIP download for directories (bandwidth-limited) - reads roots dynamically
+	mux.Handle("/zip/", bw.Wrap(handlers.ZipHandler(title)))
 
-	// Inline file serving for previews (bandwidth-limited, not counted in stats)
-	mux.Handle("/view/", bw.Wrap(http.StripPrefix("/view", handlers.ViewHandler(roots))))
+	// File downloads (bandwidth-limited, counted in stats) - uses dynamic resolution
+	mux.Handle("/download/", bw.Wrap(http.StripPrefix("/download", handlers.FileHandler())))
+
+	// Inline file serving for previews (bandwidth-limited, not counted in stats) - uses dynamic resolution
+	mux.Handle("/view/", bw.Wrap(http.StripPrefix("/view", handlers.ViewHandler())))
 
 	// Chroma syntax-highlighting stylesheet (read from runtime config)
 	mux.HandleFunc("/highlight.css", handlers.HighlightCSSHandler())
 
-	// File previews
-	mux.HandleFunc("/preview/", handlers.PreviewHandler(roots, title, defaultTheme, tmpl))
+	// File previews - reads roots dynamically
+	mux.HandleFunc("/preview/", handlers.PreviewHandler(title, defaultTheme, tmpl))
 
 	// Settings page
 	mux.HandleFunc("/settings", handlers.SettingsHandler(tmpl))
 
-	// Directory / root listing (catch-all)
-	mux.HandleFunc("/", routeRoot(roots, title, defaultTheme, tmpl))
+	// Directory / root listing (catch-all) - reads roots dynamically
+	mux.HandleFunc("/", routeRoot(title, defaultTheme, tmpl))
 }
 
 // routeRoot dispatches between the root listing and subdirectory listings.
-func routeRoot(roots map[string]string, title, defaultTheme string, tmpl *Templates) http.HandlerFunc {
-	rootHandler := handlers.RootHandler(roots, title, defaultTheme, tmpl)
-	dirHandler := handlers.DirHandler(roots, title, defaultTheme, tmpl)
+func routeRoot(title, defaultTheme string, tmpl *Templates) http.HandlerFunc {
+	rootHandler := handlers.RootHandler(title, defaultTheme, tmpl)
+	dirHandler := handlers.DirHandler(title, defaultTheme, tmpl)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" || r.URL.Path == "" {

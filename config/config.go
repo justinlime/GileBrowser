@@ -112,11 +112,8 @@ func Load() (*Config, error) {
         trustedProxy = os.Getenv("GILE_TRUSTED_PROXY")
     }
 
-	// Validate directories.
-	if len(dirs) == 0 {
-        return nil, fmt.Errorf("at least one root directory must be specified via -dir flag, GILE_DIRS env var, or positional argument")
-    }
-
+	// Validate directories if any were specified.
+	// Note: Directories can now be managed via the web interface, so zero dirs is allowed.
 	for _, d := range dirs {
         info, err := os.Stat(d)
         if err != nil {

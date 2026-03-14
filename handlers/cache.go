@@ -358,11 +358,13 @@ func buildSizeIndex(root string) map[string]int64 {
 // WarmCache pre-populates the directory-size cache and the search index in
 // the background so that the very first page load is served from cache.
 //
-// It must be called after the roots map is finalized. All work runs in a
-// goroutine so server startup is never delayed.
-func WarmCache(roots map[string]string) {
+// It reads roots dynamically so it picks up any directories configured at startup.
+func WarmCache() {
 	go func() {
 		log.Println("cache: warming started")
+
+		// Get current roots dynamically
+		roots := GetCurrentRootsMap()
 
 		// Build the search index — the single most expensive walk.
 		// Serialise and compress immediately so the []IndexEntry slice can be GC'd.

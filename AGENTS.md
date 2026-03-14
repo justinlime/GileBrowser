@@ -107,7 +107,7 @@ Gilebrowser/
 ├── main.go            # Entry point; embeds templates/static, loads config, starts server
 │
 ├── config/
-│   └── config.go      # Minimal CLI config (port, host, dirs); all other settings in web UI
+│   └── config.go      # Minimal CLI config (port, host); directories managed via web UI
 │
 ├── db/
 │   └── db.go          # SQLite database for persistent download statistics storage
@@ -117,14 +117,15 @@ Gilebrowser/
 │   ├── cache.go       # Directory-size and search-index caches with background refresh
 │   ├── config.go      # Unified configuration API; loads settings from DB, tracks stats
 │   ├── dir.go         # Directory listing handler, root listing, breadcrumbs
+│   ├── dirs.go        # Root directory management API (add/remove via web interface)
 │   ├── favicon.go     # Custom or embedded default favicon serving
 │   ├── file.go        # File download handler, inline view handler, search index builder
 │   ├── mime.go        # MIME type detection, text/binary classification, language hints
 │   ├── preview.go     # File preview page (images, syntax-highlighted text, binary info)
 │   ├── render.go      # Markdown/Org-mode/HTML document rendering with sanitization
 │   ├── resolve.go     # URL-to-filesystem path resolver with traversal protection
-│   ├── settings.go    # Web-based settings page handler for runtime configuration
-│   ├── watcher.go     # Filesystem watcher for cache invalidation on changes
+	│   ├── settings.go    # Web-based settings page; manages server config and root directories
+	│   ├── watcher.go     # Filesystem watcher for cache invalidation on changes
 │   └── zip.go         # Directory ZIP streaming with pre-calculated Content-Length
 │
 ├── models/

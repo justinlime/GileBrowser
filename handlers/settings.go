@@ -20,6 +20,7 @@ type SettingsPageData struct {
 	Title          string
 	SiteName       string
 	Settings       settings.Settings
+	RootDirs       []settings.RootDir  // List of configured root directories
 	SuccessMessage string
 	ErrorMessage   string
 	DefaultTheme   string
@@ -80,6 +81,7 @@ func handleSettingsGet(w http.ResponseWriter, r *http.Request, rtc RuntimeConfig
         Title:          "Settings",
         SiteName:       rtc.Title,
         Settings:       current,
+		RootDirs:         rtc.RootDirs,
         SuccessMessage: successMsg,
         ErrorMessage:   "",
         DefaultTheme:   rtc.DefaultTheme,
@@ -188,15 +190,92 @@ func handleSettingsPost(w http.ResponseWriter, r *http.Request, rtc RuntimeConfi
         out.Close()
 
         newSettings.FaviconPath = faviconPath
-        		log.Printf("settings: favicon uploaded as %s", filename)
-            }
-        
-        	// Save settings to database.
+        					log.Printf("settings: favicon uploaded as %s", filename)
+        		            }
+        		        
+        				// Process directory deletions
+        			deletedDirsStr := r.FormValue("deleted_dirs")
+        			if deletedDirsStr != "" {
+        				deletedDirs := strings.Split(deletedDirsStr, ",")
+        				for _, name := range deletedDirs {
+        					name = strings.TrimSpace(name)
+        					if name != "" {
+        						log.Printf("settings: removing directory %q", name)
+        						if err := settings.RemoveRoot(name); err != nil {
+        							log.Printf("settings: failed to remove directory %q: %v", name, err)
+        						}
+        					}
+        				}
+        			}
+        		
+        			// Process new directory additions
+        			i := 0
+        			for {
+        				nameKey := fmt.Sprintf("new_dir_name_%d", i)
+        				pathKey := fmt.Sprintf("new_dir_path_%d", i)
+        				
+        				name := strings.TrimSpace(r.FormValue(nameKey))
+        				path := strings.TrimSpace(r.FormValue(pathKey))
+        				
+        				if name == "" || path == "" {
+        					break // No more new directories
+        				}
+        				
+        				// Validate the path exists and is a directory
+        				info, err := os.Stat(path)
+        				if err != nil {
+        					log.Printf("settings: skipping invalid directory path %q: %v", path, err)
+        					i++
+        					continue
+        				}
+        				if !info.IsDir() {
+        					log.Printf("settings: skipping %q - not a directory", path)
+        					i++
+        					continue
+        				}
+        				
+        				log.Printf("settings: adding directory %q -> %q", name, path)
+        				if err := settings.AddRoot(name, path); err != nil {
+        					log.Printf("settings: failed to add directory %q: %v", name, err)
+        				}
+        				i++
+        			}
+        		
+        			// Process directory renames (updated names in existing directories)
+        			for _, rd := range rtc.RootDirs {
+        				nameKey := "dir_name_" + rd.Name
+        				newName := strings.TrimSpace(r.FormValue(nameKey))
+        				
+        				if newName == "" || newName == rd.Name {
+        					continue // No change
+        				}
+        				
+        				// Sanitize the new name
+        				safeName := strings.ToLower(newName)
+        				safeName = strings.ReplaceAll(safeName, " ", "-")
+        				safeName = strings.TrimFunc(safeName, func(r rune) bool {
+        					return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-')
+        				})
+        				
+        				if safeName != rd.Name && safeName != "" {
+        					// Remove old entry and add with new name
+        					log.Printf("settings: renaming directory %q to %q", rd.Name, safeName)
+        					settings.RemoveRoot(rd.Name)
+        					settings.AddRoot(safeName, rd.Path)
+        				}
+        			}
+        		        
+        			// Save settings to database.
 	if err := SaveSettings(newSettings); err != nil {
         log.Printf("settings: failed to save: %v", err)
         http.Error(w, "Failed to save settings", http.StatusInternalServerError)
         return
     }
+
+	// Refresh roots state if directories were changed.
+	if deletedDirsStr != "" || i > 0 { // deletions or additions occurred
+		RefreshRootsState()
+	}
 
 	log.Printf("settings: updated by user - title=%q theme=%q previews=img=%v txt=%v doc=%v bw=%.0f bps",
         newSettings.Title, newSettings.DefaultTheme,

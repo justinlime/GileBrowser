@@ -193,6 +193,86 @@ func SaveAllSettings(s Settings) error {
 	return nil
 }
 
+// RootDir represents a configured root directory with its URL-safe name.
+type RootDir struct {
+	Name string  // URL-safe name derived from path
+	Path string  // Filesystem path
+}
+
+// InitRootsTable ensures the roots table exists for storing root directories.
+func InitRootsTable() error {
+	_, err := dbConn.Exec(`
+		CREATE TABLE IF NOT EXISTS roots (
+                id     INTEGER PRIMARY KEY AUTOINCREMENT,
+                name   TEXT UNIQUE NOT NULL,
+                path   TEXT NOT NULL
+        )
+	`)
+	if err != nil {
+		return fmt.Errorf("could not create roots table: %w", err)
+    }
+	return nil
+}
+
+// GetAllRoots retrieves all configured root directories.
+func GetAllRoots() ([]RootDir, error) {
+	rows, err := dbConn.Query(`SELECT name, path FROM roots ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("could not query roots: %w", err)
+    }
+	defer rows.Close()
+
+	var roots []RootDir
+	for rows.Next() {
+		var r RootDir
+		if err := rows.Scan(&r.Name, &r.Path); err != nil {
+			continue
+        }
+		roots = append(roots, r)
+    }
+	return roots, nil
+}
+
+// AddRoot adds a new root directory with the given name and path.
+func AddRoot(name, path string) error {
+	_, err := dbConn.Exec(`INSERT INTO roots (name, path) VALUES (?, ?)`, name, path)
+	if err != nil {
+		return fmt.Errorf("could not insert root: %w", err)
+    }
+	log.Printf("settings: added root directory %q -> %q", name, path)
+	return nil
+}
+
+// RemoveRoot removes a root directory by name.
+func RemoveRoot(name string) error {
+	result, err := dbConn.Exec(`DELETE FROM roots WHERE name = ?`, name)
+	if err != nil {
+		return fmt.Errorf("could not delete root: %w", err)
+    }
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		log.Printf("settings: no root directory found with name %q", name)
+    } else {
+        log.Printf("settings: removed root directory %q", name)
+    }
+	return nil
+}
+
+// UpdateRootPath updates the path for an existing root directory by name.
+func UpdateRootPath(name, newPath string) error {
+	result, err := dbConn.Exec(`UPDATE roots SET path = ? WHERE name = ?`, newPath, name)
+	if err != nil {
+		return fmt.Errorf("could not update root path: %w", err)
+    }
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		log.Printf("settings: no root directory found with name %q to update", name)
+    } else {
+        log.Printf("settings: updated root directory %q path to %q", name, newPath)
+    }
+	return nil
+}
+
 // Helper functions for boolean serialization.
 func boolToString(b bool) string {
 	if b {

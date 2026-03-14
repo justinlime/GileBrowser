@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 
 	"gileserver/db"
 	"gileserver/settings"
@@ -29,6 +30,7 @@ type RuntimeConfig struct {
 	PreviewDocs    bool
 	BandwidthBps   float64
 	FaviconPath    string
+	RootDirs       []settings.RootDir  // List of configured root directories
 }
 
 var (
@@ -37,7 +39,7 @@ var (
 )
 
 // InitConfig initializes both the settings database and stats database.
-// The dbDir parameter specifies where gile.db will be stored.
+// The dataDir parameter specifies where gile.db will be stored.
 // Call this once during server startup before any other operations.
 func InitConfig(dataDir string) {
 	// Store data directory for later use by handlers
@@ -47,6 +49,11 @@ func InitConfig(dataDir string) {
 	// Initialize settings storage.
 	if err := settings.InitSettings(dbPath); err != nil {
         log.Printf("config: failed to initialize settings database: %v", err)
+    }
+
+	// Initialize roots table for directory management.
+	if err := settings.InitRootsTable(); err != nil {
+        log.Printf("config: failed to initialize roots table: %v", err)
     }
 
 	// Initialize stats storage (uses same database file).
@@ -67,6 +74,13 @@ func LoadRuntimeConfig() {
         return
     }
 
+	// Load root directories from database.
+	roots, err := settings.GetAllRoots()
+	if err != nil {
+        log.Printf("config: failed to load roots: %v", err)
+        roots = []settings.RootDir{}
+    }
+
 	runtimeConfig = RuntimeConfig{
         Title:          s.Title,
         DefaultTheme:   s.DefaultTheme,
@@ -76,12 +90,13 @@ func LoadRuntimeConfig() {
         PreviewDocs:    s.PreviewDocs,
         BandwidthBps:   s.BandwidthBps,
         FaviconPath:    s.FaviconPath,
+        RootDirs:       roots,
     }
 
-	log.Printf("config: loaded - title=%q theme=%q previews=img=%v txt=%v doc=%v bw=%v favicon=%q",
+	log.Printf("config: loaded - title=%q theme=%q previews=img=%v txt=%v doc=%v bw=%v favicon=%q roots=%d",
         runtimeConfig.Title, runtimeConfig.DefaultTheme,
         runtimeConfig.PreviewImages, runtimeConfig.PreviewText, runtimeConfig.PreviewDocs,
-        formatBandwidth(runtimeConfig.BandwidthBps), runtimeConfig.FaviconPath)
+        formatBandwidth(runtimeConfig.BandwidthBps), runtimeConfig.FaviconPath, len(roots))
 }
 
 // GetRuntimeConfig returns the current active configuration.
@@ -102,6 +117,15 @@ func SaveSettings(s settings.Settings) error {
 	LoadRuntimeConfig()
 	UpdateRenderOptions() // Update renderer with new theme/image policy
 	return nil
+}
+
+// rootName derives a URL-safe root name from a filesystem directory path.
+// It uses the base name of the path, lowercased, with spaces replaced by hyphens.
+func rootName(dir string) string {
+	base := filepath.Base(filepath.Clean(dir))
+	base = strings.ToLower(base)
+	base = strings.ReplaceAll(base, " ", "-")
+	return base
 }
 
 // RecordDownload increments the counters by one download of bytesSent bytes
@@ -147,4 +171,78 @@ func formatBandwidth(bps float64) string {
     default:
         return fmt.Sprintf("%.0f bps", bits)
     }
+}
+
+// GetRootsMap returns a map of root name -> filesystem path.
+// This combines CLI-provided directories with database-stored ones.
+// It reads from the runtime config on every call, so directory changes
+// take effect immediately without server restart.
+func GetRootsMap(cliDirs []string) map[string]string {
+	roots := make(map[string]string)
+	
+	// First, add all database-stored roots.
+	rtc := GetRuntimeConfig()
+	for _, rd := range rtc.RootDirs {
+		roots[rd.Name] = rd.Path
+    }
+
+	// CLI directories take precedence and are added/overwritten.
+	// This maintains backward compatibility for users who still use -dir flag.
+	for _, d := range cliDirs {
+        name := rootName(d)
+        roots[name] = d
+    }
+
+	return roots
+}
+
+// GetCurrentRootsMap returns the current roots map by reading CLI dirs from global state.
+// Use this in handlers that need dynamic roots without passing cliDirs parameter.
+func GetCurrentRootsMap() map[string]string {
+	return GetRootsMap(cliDirs)
+}
+
+var cliDirs []string  // CLI-provided directories, set at startup
+
+// SetCLIDirs stores the CLI-provided directories for later use in GetRootsMap.
+func SetCLIDirs(dirs []string) {
+	cliDirs = dirs
+}
+
+// RefreshRootsState invalidates caches and restarts the watcher when root directories change.
+// Call this after adding/removing directories via the web interface to make changes take effect immediately.
+func RefreshRootsState() {
+	log.Println("handlers: refreshing roots state - invalidating caches")
+	
+	// Invalidate search index cache.
+	invalidateIndex()
+	
+	// Clear size cache for all paths (they may have changed).
+	sizeCache.mu.Lock()
+	for path := range sizeCache.entries {
+		delete(sizeCache.entries, path)
+    }
+	sizeCache.mu.Unlock()
+	
+	log.Println("handlers: roots state refreshed - caches cleared")
+}
+
+// AddRootDir adds a new root directory to the database.
+func AddRootDir(name, path string) error {
+	if err := settings.AddRoot(name, path); err != nil {
+		return err
+    }
+	LoadRuntimeConfig()
+	log.Printf("handlers: added root directory %q -> %q", name, path)
+	return nil
+}
+
+// RemoveRootDir removes a root directory from the database.
+func RemoveRootDir(name string) error {
+	if err := settings.RemoveRoot(name); err != nil {
+		return err
+    }
+	LoadRuntimeConfig()
+	log.Printf("handlers: removed root directory %q", name)
+	return nil
 }

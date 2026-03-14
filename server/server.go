@@ -31,16 +31,12 @@ func staticHandler() http.Handler {
 
 // Run starts the HTTP server with the given configuration.
 func Run(cfg *config.Config, templateFS embed.FS) error {
-	// Build root map: name -> filesystem path
-	roots := make(map[string]string, len(cfg.Dirs))
-	for _, d := range cfg.Dirs {
-        name := rootName(d)
-        roots[name] = d
-    }
-
 	// Initialize configuration database and load persisted settings.
 	// This must happen before any other handler initialization.
 	handlers.InitConfig(cfg.DataDir)
+
+	// Store CLI directories for dynamic roots resolution.
+	handlers.SetCLIDirs(cfg.Dirs)
 
 	// Load runtime config from database.
 	rtc := handlers.GetRuntimeConfig()
@@ -53,7 +49,7 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 	bwManager := handlers.NewBandwidthManager(rtc.BandwidthBps)
 
 	mux := http.NewServeMux()
-	registerRoutes(mux, roots, rtc.HighlightTheme, rtc.Title, rtc.FaviconPath, rtc.DefaultTheme, bwManager, tmpl)
+	registerRoutes(mux, rtc.HighlightTheme, rtc.Title, rtc.FaviconPath, rtc.DefaultTheme, bwManager, tmpl)
 	wrappedMux := securityHeaders(mux)
 
 	// Configure reverse-proxy IP forwarding before any request is served.
@@ -65,15 +61,15 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 	handlers.InitRenderOptions(rtc.HighlightTheme, rtc.PreviewImages)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-	logStartup(cfg, roots, addr)
+	logStartup(cfg, addr)
 
 	// Warm the directory-size and search-index caches in the background so
 	// that the first real page load is never a cold cache miss.
-	handlers.WarmCache(roots)
+	handlers.WarmCache()
 
 	// Watch all managed directories for filesystem changes and invalidate
 	// only the affected cache entries when they occur.
-	if _, err := handlers.StartWatcher(roots); err != nil {
+	if _, err := handlers.StartWatcher(); err != nil {
 		log.Printf("watcher: could not start filesystem watcher: %v", err)
 	}
 
@@ -102,7 +98,7 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 }
 
 // logStartup prints a structured summary of the active configuration.
-func logStartup(cfg *config.Config, roots map[string]string, addr string) {
+func logStartup(cfg *config.Config, addr string) {
 	// Get runtime config for display values (from database).
 	rtc := handlers.GetRuntimeConfig()
 
@@ -134,9 +130,9 @@ func logStartup(cfg *config.Config, roots map[string]string, addr string) {
         enabledStr(rtc.PreviewDocs),
     )
 
-	log.Printf("  %-18s %d director%s", "Serving:", len(roots), map[bool]string{true: "y", false: "ies"}[len(roots) == 1])
-	for name, fsPath := range roots {
-		log.Printf("    /%-16s %s", name, fsPath)
+	log.Printf("  %-18s %d director%s", "Serving:", len(rtc.RootDirs), map[bool]string{true: "y", false: "ies"}[len(rtc.RootDirs) == 1])
+	for _, rd := range rtc.RootDirs {
+		log.Printf("    /%-16s %s", rd.Name, rd.Path)
 	}
 	log.Println(sep)
 }
