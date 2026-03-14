@@ -39,7 +39,9 @@ var (
 // InitConfig initializes both the settings database and stats database.
 // The dbDir parameter specifies where gile.db will be stored.
 // Call this once during server startup before any other operations.
-func InitConfig(dbDir string) {
+func InitConfig(dataDir string) {
+	// Store data directory for later use by handlers
+	dbDir = dataDir
 	dbPath := filepath.Join(dbDir, "gile.db")
 
 	// Initialize settings storage.
