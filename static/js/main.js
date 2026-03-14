@@ -750,3 +750,166 @@
     makeImagesClickable();
   }
 })();
+
+// ------------------------------------------------------------------ //
+// Toast Notifications                                                //
+// ------------------------------------------------------------------ //
+
+(function () {
+  "use strict";
+
+  function showToast(message, duration) {
+    if (!duration) duration = 3000;
+
+    var toast = document.createElement("div");
+    toast.className = "toast-notification";
+    toast.textContent = message;
+    
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    setTimeout(function () {
+      toast.classList.add("show");
+    }, 10);
+
+    // Remove after duration
+    setTimeout(function () {
+      toast.classList.remove("show");
+      setTimeout(function () {
+        if (toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+      }, 300);
+    }, duration);
+  }
+
+  window.showToast = showToast;
+})();
+
+// ------------------------------------------------------------------ //
+// Settings Form with Toast Notification                              //
+// ------------------------------------------------------------------ //
+
+(function () {
+  "use strict";
+
+  var settingsForm = document.querySelector(".settings-form");
+  if (!settingsForm) return;
+
+  settingsForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    var formData = new FormData(settingsForm);
+
+    fetch(settingsForm.action, {
+      method: "POST",
+      body: formData,
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (data) {
+        if (data.success) {
+          // Show toast notification
+          window.showToast(data.message, 3000);
+        } else {
+          alert("Failed to save settings: " + (data.error || "Unknown error"));
+        }
+      })
+      .catch(function (error) {
+        console.error("Settings save error:", error);
+        alert("Failed to save settings. Please try again.");
+      });
+  });
+})();
+
+// ------------------------------------------------------------------ //
+// Favicon Delete Button (clears preview, applies on save)            //
+// ------------------------------------------------------------------ //
+
+(function () {
+  "use strict";
+
+  var deleteBtn = document.querySelector(".delete-favicon-btn");
+  if (!deleteBtn) return;
+
+  deleteBtn.addEventListener("click", function () {
+    // Clear the file input
+    var fileInput = document.getElementById("favicon-file");
+    if (fileInput) {
+      fileInput.value = ""; // Clear selected file
+    }
+
+    // Hide the current favicon display by removing it from DOM
+    var container = this.closest(".current-favicon-container");
+    if (container) {
+      container.style.display = "none";
+    }
+
+    // Show "No custom favicon set" message
+    var noFaviconMsg = document.querySelector("fieldset legend + p:not(.help-text)");
+    if (!noFaviconMsg) {
+      var legend = deleteBtn.closest("fieldset").querySelector("legend");
+      if (legend) {
+        noFaviconMsg = document.createElement("p");
+        noFaviconMsg.textContent = "No custom favicon set.";
+        legend.parentNode.insertBefore(noFaviconMsg, legend.nextSibling);
+      }
+    }
+    if (noFaviconMsg && noFaviconMsg.style.display === "none") {
+      noFaviconMsg.style.display = "block";
+    }
+  });
+})();
+
+// ------------------------------------------------------------------ //
+// Favicon Delete Button (clears preview, applies on save)            //
+// ------------------------------------------------------------------ //
+
+(function () {
+  "use strict";
+
+  var deleteBtn = document.querySelector(".delete-favicon-btn");
+  if (!deleteBtn) return;
+
+  deleteBtn.addEventListener("click", function () {
+    log("settings: user clicked delete favicon button");
+    
+    // Set the hidden field to signal deletion on save
+    var deleteFlag = document.getElementById("delete-favicon-flag");
+    if (deleteFlag) {
+      deleteFlag.value = "1";
+      log("settings: set delete flag to 1");
+    }
+
+    // Clear the file input
+    var fileInput = document.getElementById("favicon-file");
+    if (fileInput) {
+      fileInput.value = ""; // Clear selected file
+    }
+
+    // Hide the current favicon display by removing it from DOM
+    var container = document.getElementById("current-favicon-display");
+    if (container) {
+      container.style.display = "none";
+      log("settings: hidden current favicon display");
+    }
+
+    // Show "No custom favicon set" message
+    var legend = deleteBtn.closest("fieldset").querySelector("legend");
+    if (legend) {
+      var nextP = legend.nextElementSibling;
+      if (!nextP || nextP.tagName !== "P") {
+        var noFaviconMsg = document.createElement("p");
+        noFaviconMsg.textContent = "No custom favicon set.";
+        legend.parentNode.insertBefore(noFaviconMsg, legend.nextSibling);
+        log("settings: added 'no favicon' message");
+      }
+    }
+  });
+})();
+
+// Simple log helper for settings form
+function log(msg) {
+  console.log("[Settings]", msg);
+}

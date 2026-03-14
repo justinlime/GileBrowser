@@ -21,17 +21,20 @@ type StatsSnapshot struct {
 // RuntimeConfig holds the active configuration used by the server.
 // Values are loaded from the database at startup and can be updated via the web interface.
 type RuntimeConfig struct {
-	Title         string
-	DefaultTheme  string
+	Title          string
+	DefaultTheme   string
 	HighlightTheme string  // Derived from DefaultTheme (catppuccin-mocha/latte)
-	PreviewImages bool
-	PreviewText   bool
-	PreviewDocs   bool
-	BandwidthBps  float64
-	FaviconPath   string
+	PreviewImages  bool
+	PreviewText    bool
+	PreviewDocs    bool
+	BandwidthBps   float64
+	FaviconPath    string
 }
 
-var runtimeConfig RuntimeConfig
+var (
+	runtimeConfig RuntimeConfig
+	dbDir         string  // Directory where database and other data is stored
+)
 
 // InitConfig initializes both the settings database and stats database.
 // The dbDir parameter specifies where gile.db will be stored.
@@ -84,6 +87,11 @@ func GetRuntimeConfig() RuntimeConfig {
 	return runtimeConfig
 }
 
+// GetDataDir returns the directory where persistent data is stored.
+func GetDataDir() string {
+	return dbDir
+}
+
 // SaveSettings persists new settings to the database and updates runtime config.
 func SaveSettings(s settings.Settings) error {
 	if err := settings.SaveAllSettings(s); err != nil {
@@ -128,7 +136,7 @@ func formatBandwidth(bps float64) string {
     }
 	bits := bps * 8
 	switch {
-	case bits >= 1_000_000_000:
+    case bits >= 1_000_000_000:
         return fmt.Sprintf("%.2f Gbps", bits/1_000_000_000)
     case bits >= 1_000_000:
         return fmt.Sprintf("%.2f Mbps", bits/1_000_000)

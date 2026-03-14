@@ -59,15 +59,21 @@ func securityHeaders(h http.Handler) http.Handler {
 // mux in the security-headers middleware so every response carries the
 // defensive headers regardless of which route matched.
 func registerRoutes(mux *http.ServeMux, roots map[string]string, theme, title, faviconPath, defaultTheme string, bw *handlers.BandwidthManager, tmpl *Templates) {
+	dataDir := handlers.GetDataDir()
+
 	// Static assets
 	mux.Handle("/static/", http.StripPrefix("/static/", staticHandler()))
 
-	// Favicon — pass the static sub-FS so the handler can read the embedded default.
+	// Favicon — reads custom path from runtime config on each request
 	staticSub, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		log.Fatalf("static sub fs for favicon: %v", err)
 	}
-	mux.HandleFunc("/favicon.ico", handlers.FaviconHandler(staticSub, faviconPath))
+	mux.HandleFunc("/favicon.ico", handlers.FaviconHandler(staticSub))
+
+	// Favicon upload (POST) and delete (DELETE)
+	mux.HandleFunc("/settings/favicon/upload", handlers.FaviconUploadHandler(dataDir))
+	mux.HandleFunc("/settings/favicon/delete", handlers.FaviconDeleteHandler())
 
 	// Search index (JSON)
 	mux.HandleFunc("/api/index", handlers.IndexHandler(roots))

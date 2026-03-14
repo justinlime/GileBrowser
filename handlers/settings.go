@@ -4,8 +4,11 @@ package handlers
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -91,7 +94,9 @@ func handleSettingsGet(w http.ResponseWriter, r *http.Request, rtc RuntimeConfig
 
 // handleSettingsPost processes form submission and saves new settings.
 func handleSettingsPost(w http.ResponseWriter, r *http.Request, rtc RuntimeConfig) {
-	if err := r.ParseForm(); err != nil {
+	// Parse multipart form (supports both regular POST and file uploads)
+	if err := r.ParseMultipartForm(1024 * 1024); err != nil {
+        log.Printf("settings: failed to parse form: %v", err)
         http.Error(w, "Unable to parse form", http.StatusBadRequest)
         return
     }
@@ -99,7 +104,7 @@ func handleSettingsPost(w http.ResponseWriter, r *http.Request, rtc RuntimeConfi
 	newSettings := settings.Settings{
         Title:       r.FormValue("title"),
         DefaultTheme: r.FormValue("default_theme"),
-        FaviconPath:  r.FormValue("favicon_path"),
+        FaviconPath:  rtc.FaviconPath, // Start with current value
     }
 
 	// Validate title.
@@ -134,7 +139,59 @@ func handleSettingsPost(w http.ResponseWriter, r *http.Request, rtc RuntimeConfi
         newSettings.BandwidthBps = 0 // Empty means unlimited.
     }
 
-	// Save settings to database.
+	// Handle favicon deletion (user clicked × button)
+	if r.FormValue("delete_favicon") == "1" && rtc.FaviconPath != "" {
+        log.Printf("settings: deleting custom favicon %s", rtc.FaviconPath)
+        if err := os.Remove(rtc.FaviconPath); err != nil {
+            log.Printf("settings: failed to delete favicon %s: %v", rtc.FaviconPath, err)
+        }
+        newSettings.FaviconPath = ""
+    }
+
+	// Handle favicon upload
+	if file, header, err := r.FormFile("favicon"); err == nil && header.Size > 0 {
+        log.Printf("settings: processing favicon upload - %s (%d bytes)", header.Filename, header.Size)
+        defer file.Close()
+        
+        // Sanitize filename.
+        filename := sanitizeFaviconFilename(header.Filename)
+        if filename == "" {
+            log.Printf("settings: invalid favicon filename")
+            http.Error(w, "Invalid filename", http.StatusBadRequest)
+            return
+        }
+
+        dataDir := GetDataDir()
+        faviconPath := filepath.Join(dataDir, "favicons", filename)
+
+        // Ensure the favicons directory exists.
+        if err := os.MkdirAll(filepath.Dir(faviconPath), 0755); err != nil {
+            log.Printf("settings: failed to create favicon directory: %v", err)
+            http.Error(w, "Failed to create upload directory", http.StatusInternalServerError)
+            return
+        }
+
+        // Save the uploaded file.
+        out, err := os.Create(faviconPath)
+        if err != nil {
+            log.Printf("settings: failed to create favicon file: %v", err)
+            http.Error(w, "Failed to save upload", http.StatusInternalServerError)
+            return
+        }
+        
+        if _, err := io.Copy(out, file); err != nil {
+            out.Close()
+            log.Printf("settings: failed to write favicon: %v", err)
+            http.Error(w, "Failed to save upload", http.StatusInternalServerError)
+            return
+        }
+        out.Close()
+
+        newSettings.FaviconPath = faviconPath
+        		log.Printf("settings: favicon uploaded as %s", filename)
+            }
+        
+        	// Save settings to database.
 	if err := SaveSettings(newSettings); err != nil {
         log.Printf("settings: failed to save: %v", err)
         http.Error(w, "Failed to save settings", http.StatusInternalServerError)
@@ -146,8 +203,10 @@ func handleSettingsPost(w http.ResponseWriter, r *http.Request, rtc RuntimeConfi
         newSettings.PreviewImages, newSettings.PreviewText, newSettings.PreviewDocs,
         newSettings.BandwidthBps*8)
 
-	// Redirect back to settings page with success message.
-	http.Redirect(w, r, "/settings?success=1", http.StatusSeeOther)
+	// Return JSON response with success message for AJAX handling.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `{"success": true, "message": "Settings Saved"}`)
 }
 
 // parseBandwidthFromString converts a human-readable bandwidth string to bytes per second.

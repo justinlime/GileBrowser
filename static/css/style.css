@@ -1796,14 +1796,141 @@ a:hover {
   	font-size: 1rem;
   }
   
-  .form-actions {
-  	display: flex;
-  	gap: 0.8rem;
-  	justify-content: center;
-  	margin-top: 1.5rem;
-  	padding-top: 1rem;
-  	border-top: 1px solid var(--border);
-  }
+  	.form-actions {
+  		display: flex;
+  		gap: 0.8rem;
+  		justify-content: center;
+  		margin-top: 1.5rem;
+  		padding-top: 1rem;
+  		border-top: 1px solid var(--border);
+  	}
+  
+  	/* Favicon upload form */
+  	#favicon-upload-form {
+  		display: flex;
+  		align-items: center;
+  		gap: 0.8rem;
+  		margin-bottom: 0.5rem;
+  		flex-wrap: wrap;
+  	}
+  
+  	#favicon-file {
+  		flex: 1;
+  		min-width: 200px;
+  		padding: 0.6rem;
+  		background: var(--surface2);
+  		border: 1px solid var(--border);
+  		border-radius: calc(var(--radius) / 2);
+  		color: var(--text);
+  		font-size: 0.95rem;
+  	}
+  
+  	#favicon-file::file-selector-button {
+  		padding: 0.4rem 0.8rem;
+  		background: var(--accent-dim);
+  		border: none;
+  		border-radius: calc(var(--radius) / 2);
+  		color: var(--text);
+  		cursor: pointer;
+  		margin-right: 0.5rem;
+  		transition: background 0.15s ease, color 0.15s ease;
+  	}
+  
+  	#favicon-file::file-selector-button:hover {
+  		background: var(--accent);
+  		color: var(--ctp-base);
+  	}
+  
+  	/* Danger button for delete */
+  	.btn-danger {
+  		background: var(--danger);
+  		color: var(--ctp-base);
+  		border-color: var(--danger);
+  	}
+  		.btn-danger:hover {
+  			background: var(--ctp-red);
+  			border-color: var(--ctp-red);
+  			box-shadow: 0 8px 12px -3px rgba(0, 0, 0, 0.25), 0 6px 8px -4px rgba(0, 0, 0, 0.15);
+  			color: var(--ctp-base);
+  		}
+  	
+  			/* Toast notifications */
+  			.toast-notification {
+  				position: fixed;
+  				top: 2rem;
+  				right: 2rem;
+  				background: var(--surface2);
+  				border: 1px solid var(--success);
+  				color: var(--success);
+  				padding: 1rem 1.5rem;
+  				border-radius: var(--radius);
+  				box-shadow: var(--shadow-md);
+  				font-size: 0.95rem;
+  				font-weight: 500;
+  				z-index: 10000;
+  				opacity: 0;
+  				visibility: hidden;
+  				transform: translateX(100%);
+  				transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+  			}
+  		
+  			.toast-notification.show {
+  				opacity: 1;
+  				visibility: visible;
+  				transform: translateX(0);
+  			}
+  		
+  			/* Current favicon preview */
+  			.current-favicon-container {
+  				display: flex;
+  				align-items: center;
+  				gap: 0.8rem;
+  				margin-bottom: 0.6rem;
+  				flex-wrap: wrap;
+  			}
+  		
+  			.favicon-preview {
+  				width: 32px;
+  				height: 32px;
+  				border-radius: 4px;
+  				border: 1px solid var(--border);
+  				display: block;
+  				flex-shrink: 0;
+  			}
+  		
+  			.current-favicon-container code {
+  				background: var(--surface2);
+  				padding: 0.3rem 0.6rem;
+  				border-radius: calc(var(--radius) / 2);
+  				font-size: 0.85rem;
+  				color: var(--text-muted);
+  				flex: 1;
+  				min-width: 150px;
+  				word-break: break-all;
+  			}
+  		
+  				.delete-favicon-btn {
+  					padding: 0.3rem 0.5rem;
+  					background: var(--danger);
+  					color: var(--ctp-base);
+  					border: none;
+  					border-radius: calc(var(--radius) / 2);
+  					cursor: pointer;
+  					font-size: 1rem;
+  					line-height: 1;
+  					transition: background 0.15s ease, transform 0.15s ease;
+  					flex-shrink: 0;
+  				}
+  			
+  				.delete-favicon-btn:hover {
+  					background: var(--ctp-red);
+  					transform: scale(1.1);
+  				}
+  			
+  				.current-favicon-container.deleting .delete-favicon-btn {
+  					background: var(--success);
+  					content: "✓";
+  				}
   
   .success-message {
   	background: color-mix(in srgb, var(--success) 20%, transparent);

@@ -7,7 +7,7 @@
 
 <h1>Server Settings</h1>
 
-<form method="POST" action="/settings" class="settings-form">
+<form method="POST" action="/settings" enctype="multipart/form-data" class="settings-form">
   <div class="form-group">
     <label for="title">Site Title</label>
     <input type="text" id="title" name="title" value="{{.Settings.Title}}" required placeholder="GileBrowser">
@@ -51,11 +51,27 @@
     <span class="help-text">Maximum upload bandwidth. Leave empty for unlimited.</span>
   </div>
 
-  <div class="form-group">
-    <label for="favicon_path">Custom Favicon Path (optional)</label>
-    <input type="text" id="favicon_path" name="favicon_path" value="{{.Settings.FaviconPath}}" placeholder="/path/to/favicon.ico">
-    <span class="help-text">Path to a custom favicon file. Leave empty for default.</span>
-  </div>
+  <fieldset class="form-group">
+    <legend>Custom Favicon</legend>
+    
+    {{if .Settings.FaviconPath}}
+    <div class="current-favicon-container" id="current-favicon-display">
+      <span><strong>Current favicon:</strong></span>
+      <img src="/favicon.ico?nocache={{.Settings.FaviconPath}}" alt="Current favicon" class="favicon-preview" />
+      <code>{{.Settings.FaviconPath}}</code>
+      <button type="button" class="btn btn-sm delete-favicon-btn" title="Remove current favicon">✕</button>
+    </div>
+    <input type="hidden" name="delete_favicon" id="delete-favicon-flag" value="0">
+    {{else}}
+    <p>No custom favicon set.</p>
+    {{end}}
+
+    <div class="checkbox-group">
+      <input type="file" id="favicon-file" name="favicon" accept="image/png,image/x-icon,image/svg+xml,.ico,.png,.svg">
+    </div>
+
+    <span class="help-text">Supported formats: PNG, ICO, SVG. Recommended size: 32x32 or 64x64 pixels.</span>
+  </fieldset>
 
   <div class="form-actions">
     <button type="submit" class="btn btn-primary">Save Settings</button>
@@ -63,11 +79,4 @@
   </div>
 </form>
 
-{{if .SuccessMessage}}
-<div class="success-message">{{.SuccessMessage}}</div>
-{{end}}
-
-{{if .ErrorMessage}}
-<div class="error-message">{{.ErrorMessage}}</div>
-{{end}}
 {{end}}
