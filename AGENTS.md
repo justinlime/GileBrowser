@@ -1,112 +1,160 @@
-# Project Structure
+# Gilebrowser - Project Guidelines
 
 ## Overview
-This is a file download server built in Go that serves files via HTTP. The server allows users to configure multiple root directories and provides a web UI for browsing and downloading files.
 
-## Core Features
+Gilebrowser is a minimal and simplistic download/upload server that mimics a filesystem interface in a WebGUI, written in Go. The project prioritizes simplicity, security, and offline functionality.
 
-### Directory Management
-- Accept multiple directories as root paths for the file server
-- All supplied directories appear in the UI root
-- Each directory root is accessible as a top-level path
+---
 
-### File Serving
-- Serve files via HTTP with proper MIME types
-- Maintain filesystem-like URL structure (e.g., `/test1/subdir/file.txt` => `http://localhost:7887/test1/subdir/file.txt`)
-- Support for nested directory navigation
-- **Directory Downloads**: Allow users to download entire directories as ZIP archives
-- **Proper HTTP Headers**: Set Content-Length and other headers correctly to enable download progress tracking on client side
+## Architecture & Design Principles
 
-### File Previews
-- **Image files** (PNG, JPEG, GIF, etc.): Render inline preview before download
-- **Text files**: Render preview with syntax highlighting
-- All previews are server-side rendered to minimize client-side dependencies
+### Core Philosophy
+- **Minimalism**: Keep the codebase small and focused on core functionality
+- **Simplicity**: Avoid unnecessary complexity; prefer straightforward solutions
+- **Security First**: All code must consider common attack vectors (path traversal, XSS, DoS, buffer overflows)
+- **Offline-First**: Zero reliance on external CDN networks; all assets bundled or generated locally
 
-### UI/UX
-- Modern but basic user interface
-- Clean file/folder navigation
-- Download buttons and preview options
-- **No Emojis**: Do not use emojis anywhere in the UI
+### Docker-Friendly Design
+- Server configuration handled via CMD flags, with ENV var fallbacks
+- When introducing new CMD flags or ENV vars:
+  - Document them in `README.md`
+  - Ensure sensible defaults exist
+  - Support both methods equally (CMD takes precedence over ENV)
 
-### File Search
-- **Fuzzy Finder Style Search**: Built-in search that recurses all subdirectories from the CWD
-- **Client-Side Indexing**: Search functionality operates on client-side with server-provided file index
-- **Real-Time Results**: Instant filtering as user types with fuzzy matching algorithm
+---
 
-## Project Goals
-- Keep codebase clean and maintainable
-- Add new features only with explicit instruction
-- Minimize client-side rendering reliance
-- Server-side focused implementation
-- **Zero external CDN dependencies** - All JS libraries, CSS frameworks, fonts, and other assets must be served locally from the server
-- **Dynamic File Serving**: The fileserver must be dynamic and responsive to filesystem changes. When an admin adds, removes, or modifies files in the served directories, the server should immediately reflect these changes without requiring a restart. This includes updating directory listings, file metadata, and search indexes in real-time.
+## Code Standards
 
-## Tech Stack
-- **Language**: Go (Golang)
-- **Web Framework**: [To be determined]
-- **Templates**: Go html/template (server-side rendering)
-- **Static Assets**: Embedded via Go embed
-- **No External CDN Dependencies**: All JavaScript libraries, CSS frameworks, fonts, and other static assets must be bundled with the server and served locally. This ensures:
-  - Works in air-gapped or restricted network environments
-  - No third-party tracking or dependencies
-  - Full control over asset versions and updates
-  - Faster load times for local deployments
-
-## Directory Structure
+### Documentation
+- **All functions must have comments** describing what they do and why, briefly
+- Comments should be LLM-friendly for future code review automation
+- Example:
+```go
+// HandleUpload processes incoming file uploads to the specified directory.
+// Validates file size limits and sanitizes filenames to prevent path traversal.
+func HandleUpload(w http.ResponseWriter, r *http.Request) {
 ```
-gileserver/
-├── main.go                 # Application entry point
-├── go.mod                  # Go module definition
-├── go.sum                  # Go dependencies
-├── AGENTS.md               # This file
-├── CLAUDE.md               # This file
+
+### Logging
+- Verbose by default with no log levels
+- Logs should be brief but helpful for debugging
+- Include timestamps and relevant context
+
+### Code Quality
+- Clean and maintainable code is mandatory
+- Avoid hacky workarounds unless absolutely necessary
+- If a workaround is the only solution, **explicit user consent required** before implementation
+
+---
+
+## UI Guidelines
+
+### Visual Design
+- **Emojis are strictly forbidden** in all aspects of the UI
+- Clean, minimal interface that reflects the filesystem metaphor
+- All icons/assets must be locally bundled (SVG or inline)
+
+---
+
+## Development Workflow
+
+### Testing
+- **All testing must be done in `/tmp` exclusively**
+- Never clutter the main repository with test artifacts
+- Clean up test files after verification
+
+### File Structure Documentation
+- Any file additions or removals must be documented below in "Project Files" of this AGENTS.md file
+- This maintains an accurate reference for LLMs reviewing the codebase
+- **AGENTS.md should only be modified** when updating directory structure OR when explicitly requested by the user
+
+---
+
+## Security Considerations
+
+When writing any code, consider:
+
+| Attack Vector | Mitigation |
+|---------------|------------|
+| Path Traversal | Validate and sanitize all file paths; use `filepath.Clean()` |
+| XSS | Escape all user input in HTML responses |
+| DoS | Implement reasonable limits on file sizes and concurrent connections |
+| Buffer Overflow | Use Go's safe string/slice operations; validate bounds |
+| Information Disclosure | Avoid leaking system paths or internal errors to users |
+
+---
+
+## Project Files
+
+### Current File Structure
+
+```
+Gilebrowser/
+├── AGENTS.md          # Project guidelines and context for LLMs
+├── README.md          # User documentation with feature list and usage examples
+├── Dockerfile         # Container image build instructions
+├── go.mod             # Go module definition and dependencies
+├── go.sum             # Dependency checksums
+├── main.go            # Entry point; embeds templates/static, loads config, starts server
+│
 ├── config/
-│   └── config.go           # Configuration management
-├── server/
-│   ├── server.go           # HTTP server setup
-│   └── routes.go           # Route definitions
+│   └── config.go      # Configuration parsing (CLI flags + ENV vars), validation
+│
 ├── handlers/
-│   ├── file.go             # File serving handlers
-│   ├── dir.go              # Directory listing handlers
-│   └── preview.go          # File preview handlers
+│   ├── bandwidth.go   # Server-wide upload rate limiter with per-IP fair sharing
+│   ├── cache.go       # Directory-size and search-index caches with background refresh
+│   ├── dir.go         # Directory listing handler, root listing, breadcrumbs
+│   ├── favicon.go     # Custom or embedded default favicon serving
+│   ├── file.go        # File download handler, inline view handler, search index builder
+│   ├── mime.go        # MIME type detection, text/binary classification, language hints
+│   ├── preview.go     # File preview page (images, syntax-highlighted text, binary info)
+│   ├── render.go      # Markdown/Org-mode/HTML document rendering with sanitization
+│   ├── resolve.go     # URL-to-filesystem path resolver with traversal protection
+│   ├── stats.go       # Persistent download statistics (count and bytes)
+│   ├── watcher.go     # Filesystem watcher for cache invalidation on changes
+│   └── zip.go         # Directory ZIP streaming with pre-calculated Content-Length
+│
 ├── models/
-│   └── file.go             # File/directory data structures
-├── templates/
-│   ├── base.html           # Base template
-│   ├── index.html          # Root directory listing
-│   ├── directory.html      # Subdirectory listing
-│   ├── file-preview.html   # File preview page
-│   └── image-preview.html  # Image preview template
-└── static/
-    ├── css/
-    │   └── style.css       # Styles
-    ├── js/
-    │   └── main.js         # Minimal client-side scripts
-    └── images/             # Static images
+│   └── file.go        # Data structures: FileEntry, DirListing, PreviewData, FileIndex
+│
+├── server/
+│   ├── rootname.go    # Derives URL-safe root name from filesystem path
+│   ├── routes.go      # HTTP route registration and security headers middleware
+│   ├── server.go      # Server startup, configuration logging, cache warming
+│   └── templates.go   # Template loading, execution, and helper functions
+│
+├── static/
+│   ├── css/
+│   │   └── style.css  # UI styles (dark/light themes, responsive design)
+│   ├── fonts/         # Inter font family (variable and static builds)
+│   ├── images/
+│   │   ├── favicon.svg    # Default embedded favicon
+│   │   └── folder.svg     # Folder icon for directory entries
+│   └── js/
+│       ├── main.js            # Client-side UI logic, theme toggle, lazy previews
+│       └── search-worker.js   # Web Worker for fuzzy file search
+│
+└── templates/
+    ├── base.html              # Base layout with header, footer, CSS/JS includes
+    ├── directory.html         # Directory listing template with breadcrumb nav
+    └── file-preview.html      # File preview template (image/text/binary/dir views)
 ```
 
-## Configuration
-Server configuration prioritizes **command-line flags** as the primary method, with **environment variables** as a fallback when a corresponding flag is not provided:
-- HTTP port (default: 7887)
-- Root directory paths (multiple)
-- Preview settings
-- MIME type overrides
+### Change Log
 
-**Default Listening Behavior**: By default, the server listens on all network interfaces (0.0.0.0), making it accessible from all clients.
+| Date | Action | File(s) | Description |
+|------|--------|---------|-------------|
+| Initial | Create | `AGENTS.md` | Project guidelines document |
 
-This approach ensures that explicit CLI arguments take precedence, while still allowing convenient environment-based configuration for optional or default values.
+---
 
-## Development Guidelines
-1. **Clean Code**: Follow Go best practices (effective go, go style guide)
-2. **Documentation**: Keep README and inline docs updated
-3. **Error Handling**: Proper error propagation and user-friendly messages
-4. **Security**: Validate file paths, prevent directory traversal attacks
-5. **Performance**: Handle large files efficiently, proper streaming
+## Quick Reference for LLMs
 
-## Build & Test Policy
-- **Isolated Execution**: All builds and tests must be run from `/tmp` to avoid polluting the repository with build artifacts, test binaries, or temporary files
-- **Clean Repository**: The source repository should remain clean of generated files at all times
-- **Example Workflow**: 
-  - Copy source to `/tmp/gileserver-build/` before building
-  - Run `go build` and `go test` from the `/tmp` location
-  - Never commit build artifacts or test output to version control
+When working on this project, always:
+1. Read relevant source files before making changes
+2. Check this AGENTS.md for context and constraints
+3. Consider security implications of any code you write
+4. Keep comments brief but descriptive for future LLM reviewers
+5. Test in `/tmp` only
+6. Update directory structure section **only** when adding/removing project files (include brief function description per file)
+7. Do not modify AGENTS.md unless updating directory structure or explicitly asked by the user
