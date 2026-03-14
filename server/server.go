@@ -40,7 +40,7 @@ func Run(cfg *config.Config, templateFS embed.FS) error {
 
 	// Initialize configuration database and load persisted settings.
 	// This must happen before any other handler initialization.
-	handlers.InitConfig(cfg.StatsDir)
+	handlers.InitConfig(cfg.DataDir)
 
 	// Load runtime config from database.
 	rtc := handlers.GetRuntimeConfig()
